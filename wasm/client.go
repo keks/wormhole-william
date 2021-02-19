@@ -73,7 +73,7 @@ func NewClient(this js.Value, args []js.Value) interface{} {
 	client := &wormhole.Client{
 		AppID:                     appID.String(),
 		RendezvousURL:             rendezvousURL.String(),
-		TransitRelayAddress:       transitRelayAddress.String(),
+		TransitRelayURL:           transitRelayAddress.String(),
 		PassPhraseComponentLength: passPhraseComponentLength.Int(),
 	}
 	clientPtr := uintptr(unsafe.Pointer(client))
