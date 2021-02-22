@@ -421,7 +421,7 @@ func (t *fileTransport) makeTransitMsg() (*transitMsg, error) {
 		} else if t.relayProto == "ws" {
 			relayType = "direct-ws-v1"
 		} else {
-			panic("unknown relay protocol")
+			return nil, fmt.Errorf("unknown relay protocol")
 		}
 		msg.HintsV1 = append(msg.HintsV1, transitHintsV1{
 			Type: "relay-v1",
@@ -527,7 +527,7 @@ func (t *fileTransport) listenRelay() error {
 		// is no way to do that and hence this hardcoding.
 		c, _, err := websocket.Dial(ctx, "ws://" + t.relayAddr + "/v1", nil)
 		if err != nil {
-			panic("websocket.Dial failed")
+			fmt.Errorf("websocket.Dial failed")
 		}
 		conn = websocket.NetConn(ctx, c, websocket.MessageText)
 	}
