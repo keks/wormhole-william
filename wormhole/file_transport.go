@@ -490,16 +490,15 @@ func (t *fileTransport) listen() error {
 	if testDisableLocalListener {
 		return nil
 	}
-	if t.relayProto == "" || t.relayProto == "tcp" {
+	switch (t.relayProto) {
+	case "", "tcp":
 		l, err := net.Listen("tcp", ":0")
 		if err != nil {
 			return err
 		}
 
 		t.listener = l
-	}
-
-	if t.relayProto == "ws" {
+	case "ws":
 		t.listener = nil
 	}
 
