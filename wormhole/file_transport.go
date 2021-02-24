@@ -277,18 +277,19 @@ func (t *fileTransport) connectToRelay(ctx context.Context, proto string, addr s
 	} else if proto == "ws" {
 		var wsconn *websocket.Conn
 		// TODO: that url path has to come from the other side via transit message.
-		// At the moment, it is hard coded here.
+		// At the moment, it is hard coded here as "/".
 		// The RelayHint messages carry only host, port, type and priority, so this
 		// is something that needs to be modified at the message level. Perhaps create
 		// a new version of the Hints message called HintsV2?
-		wsconn, _, err = websocket.Dial(ctx, "ws://" + addr + "/v1", nil)
+		wsRelayURL := fmt.Sprintf("ws://%s/", addr)
+		wsconn, _, err = websocket.Dial(ctx, wsRelayURL, nil)
 
 		if err != nil {
 			failChan <- addr
 			return
 		}
 
-		conn = websocket.NetConn(ctx, wsconn, websocket.MessageText)
+		conn = websocket.NetConn(ctx, wsconn, websocket.MessageBinary)
 	}
 
 	_, err = conn.Write(t.relayHandshakeHeader())
@@ -529,7 +530,7 @@ func (t *fileTransport) listenRelay() error {
 		if err != nil {
 			fmt.Errorf("websocket.Dial failed")
 		}
-		conn = websocket.NetConn(ctx, c, websocket.MessageText)
+		conn = websocket.NetConn(ctx, c, websocket.MessageBinary)
 	}
 
 	_, err = conn.Write(t.relayHandshakeHeader())
