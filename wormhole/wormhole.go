@@ -107,6 +107,11 @@ func (c *Client) relayAddr() (string, error) {
 
 	urlParts := strings.Split(url, ":")
 	hostport := strings.Join(urlParts[1:], ":")
+	if urlParts[0] == "ws" {
+		// ws urls are of the form: ws://host:port/path
+		// so, the "//" needs to be removed as well.
+		hostport = hostport[2:]
+	}
 	_, _, err := net.SplitHostPort(hostport)
 	if err != nil {
 		return "", err
