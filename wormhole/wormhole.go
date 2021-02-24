@@ -64,7 +64,8 @@ var (
 	DefaultRendezvousURL = "ws://relay.magic-wormhole.io:4000/v1"
 
 	// DefaultTransitRelayUrl is the default transit server to use.
-	DefaultTransitRelayUrl = "tcp:transit.magic-wormhole.io:4001"
+	// DefaultTransitRelayUrl = "tcp:transit.magic-wormhole.io:4001"
+	DefaultTransitRelayUrl = "ws://localhost:4002"
 )
 
 func (c *Client) url() string {
