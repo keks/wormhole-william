@@ -506,7 +506,7 @@ func newTestWSRelayServer() *testRelayServer {
 	}
 
 	smux := http.NewServeMux()
-	smux.HandleFunc("/v1", rs.handleWSRelay)
+	smux.HandleFunc("/", rs.handleWSRelay)
 
 	rs.Server = httptest.NewServer(smux)
 	rs.addr = rs.Server.Listener.Addr().String()
@@ -662,12 +662,12 @@ func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
 
 	var c0 Client
 	c0.RendezvousURL = url
-	c0.TransitRelayURL = "ws:" + relayServer.addr
+	c0.TransitRelayURL = "ws://" + relayServer.addr
 
 	fmt.Printf("c0 wormhole TransitRelayurl: %v\n", c0.TransitRelayURL)
 	var c1 Client
 	c1.RendezvousURL = url
-	c1.TransitRelayURL = "ws:" + relayServer.addr
+	c1.TransitRelayURL = "ws://" + relayServer.addr
 	fmt.Printf("c1 wormhole TransitRelayurl: %v\n", c1.TransitRelayURL)
 
 	fileContent := make([]byte, 1<<16)

@@ -525,7 +525,7 @@ func (t *fileTransport) listenRelay() error {
 		// TODO: The hardcoding of the URL should be removed once there is
 		// a way to represent it in the Hint messages. At the moment, there
 		// is no way to do that and hence this hardcoding.
-		wsRelayURL := fmt.Sprintf("ws://%s/v1", t.relayAddr)
+		wsRelayURL := fmt.Sprintf("ws://%s/", t.relayAddr)
 		c, _, err := websocket.Dial(ctx, wsRelayURL, nil)
 		if err != nil {
 			fmt.Errorf("websocket.Dial failed")
