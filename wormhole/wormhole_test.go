@@ -662,13 +662,11 @@ func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
 
 	var c0 Client
 	c0.RendezvousURL = url
-	c0.TransitRelayURL = "ws://" + relayServer.addr
+	c0.TransitRelayURL = fmt.Sprintf("ws://%s", relayServer.addr)
 
-	fmt.Printf("c0 wormhole TransitRelayurl: %v\n", c0.TransitRelayURL)
 	var c1 Client
 	c1.RendezvousURL = url
-	c1.TransitRelayURL = "ws://" + relayServer.addr
-	fmt.Printf("c1 wormhole TransitRelayurl: %v\n", c1.TransitRelayURL)
+	c1.TransitRelayURL = fmt.Sprintf("ws://%s", relayServer.addr)
 
 	fileContent := make([]byte, 1<<16)
 	for i := 0; i < len(fileContent); i++ {
