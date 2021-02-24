@@ -525,7 +525,7 @@ func (rs *testRelayServer) handleWSRelay(w http.ResponseWriter, r *http.Request)
 	fmt.Printf("wormhole websocket upgrade succeeded\n")
 
 	ctx := context.Background()
-	conn := websocket.NetConn(ctx, c, websocket.MessageText)
+	conn := websocket.NetConn(ctx, c, websocket.MessageBinary)
 	rs.wg.Add(1)
 	go rs.handleConn(conn)
 }
