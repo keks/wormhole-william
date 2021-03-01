@@ -230,7 +230,8 @@ func getClient(clientPtr uintptr) (error, *wormhole.Client) {
 
 // pass a javascript defined function and call it from Go-Land
 // How do we capture in types, the fact that callbackFn has two arguments?
-func withProgress(_this js.Value, callbackFn js.Value) interface{} {
+func withProgress(_ js.Value, args []js.Value) interface{} {
+	callbackFn := args[0]
 	if callbackFn.Type() != js.TypeFunction {
 		fmt.Println("expected a function to be passed\n")
 	}
@@ -245,8 +246,8 @@ func withProgress(_this js.Value, callbackFn js.Value) interface{} {
 	// think? So, we should probably pass a wrapper to
 	// WithProgress?
 
-	f := func(sentBytes js.Value, totalBytes js.Value) interface{} {
-		return callbackFn.Invoke(sentBytes, totalBytes)
+	f := func(sentBytes, totalBytes int64) {
+		callbackFn.Invoke(sentBytes, totalBytes)
 	}
 
 	return wormhole.WithProgress(f)
