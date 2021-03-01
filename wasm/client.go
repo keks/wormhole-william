@@ -229,8 +229,7 @@ func getClient(clientPtr uintptr) (error, *wormhole.Client) {
 }
 
 // pass a javascript defined function and call it from Go-Land
-// How do we capture in types, the fact that callbackFn has two arguments?
-func withProgress(_ js.Value, args []js.Value) interface{} {
+func Client_withProgress(_ js.Value, args []js.Value) interface{} {
 	callbackFn := args[0]
 	if callbackFn.Type() != js.TypeFunction {
 		fmt.Println("expected a function to be passed\n")
