@@ -227,3 +227,27 @@ func getClient(clientPtr uintptr) (error, *wormhole.Client) {
 
 	return nil, client
 }
+
+// pass a javascript defined function and call it from Go-Land
+// How do we capture in types, the fact that callbackFn has two arguments?
+func withProgress(_this js.Value, callbackFn js.Value) interface{} {
+	if callbackFn.Type() != js.TypeFunction {
+		fmt.Println("expected a function to be passed\n")
+	}
+
+	// returns an interface type that should be cast to SendOption
+	// so that setOption() can be called on that returned value
+	// with the rest of the options passed into it as a parameter.
+
+	// some hints here:
+	// https://stackoverflow.com/questions/62821877/how-to-call-an-external-js-function-from-wasm
+	// we will have to use callbackFn.Invoke() to call it, I
+	// think? So, we should probably pass a wrapper to
+	// WithProgress?
+
+	f := func(sentBytes js.Value, totalBytes js.Value) interface{} {
+		return callbackFn.Invoke(sentBytes, totalBytes)
+	}
+
+	return wormhole.WithProgress(f)
+}
