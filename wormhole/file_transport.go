@@ -203,6 +203,16 @@ func (t *fileTransport) connectViaRelay(otherTransit *transitMsg) (net.Conn, err
 
 					go t.connectToRelay(ctx, "ws", addr, successChan, failChan)
 				}
+
+				if innerHint.Type == "direct-wss-v1" {
+					count++
+					ctx, cancel := context.WithCancel(context.Background())
+					addr := net.JoinHostPort(innerHint.Hostname, strconv.Itoa(innerHint.Port))
+
+					cancelFuncs[addr] = cancel
+
+					go t.connectToRelay(ctx, "wss", addr, successChan, failChan)
+				}
 			}
 		}
 	}
@@ -267,21 +277,22 @@ func (t *fileTransport) connectToRelay(ctx context.Context, proto string, addr s
 	var d net.Dialer
 	var conn net.Conn
 	var err error
-	if proto == "tcp" {
+	switch proto {
+	case "tcp":
 		conn, err = d.DialContext(ctx, proto, addr)
 
 		if err != nil {
 			failChan <- addr
 			return
 		}
-	} else if proto == "ws" {
+	case "ws", "wss", "http", "https":
 		var wsconn *websocket.Conn
 		// TODO: that url path has to come from the other side via transit message.
 		// At the moment, it is hard coded here as "/".
 		// The RelayHint messages carry only host, port, type and priority, so this
 		// is something that needs to be modified at the message level. Perhaps create
 		// a new version of the Hints message called HintsV2?
-		wsRelayURL := fmt.Sprintf("ws://%s/", addr)
+		wsRelayURL := fmt.Sprintf("%s://%s/", proto, addr)
 		wsconn, _, err = websocket.Dial(ctx, wsRelayURL, nil)
 
 		if err != nil {
@@ -417,11 +428,14 @@ func (t *fileTransport) makeTransitMsg() (*transitMsg, error) {
 		}
 
 		var relayType string;
-		if t.relayProto == "tcp" {
+		switch t.relayProto {
+		case "tcp":
 			relayType = "direct-tcp-v1"
-		} else if t.relayProto == "ws" {
+		case "ws", "http":
 			relayType = "direct-ws-v1"
-		} else {
+		case "wss", "https":
+			relayType = "direct-wss-v1"
+		default:
 			return nil, fmt.Errorf("unknown relay protocol")
 		}
 		msg.HintsV1 = append(msg.HintsV1, transitHintsV1{
@@ -514,18 +528,17 @@ func (t *fileTransport) listenRelay() error {
 	}
 	var conn net.Conn
 	var err error
-	if t.relayProto == "tcp" {
+	switch t.relayProto {
+	case "tcp":
 		conn, err = net.Dial("tcp", t.relayAddr)
 		if err != nil {
 			return err
 		}
-	}
-
-	if t.relayProto == "ws" {
+	case "ws", "wss", "http", "https":
 		// TODO: The hardcoding of the URL should be removed once there is
 		// a way to represent it in the Hint messages. At the moment, there
 		// is no way to do that and hence this hardcoding.
-		wsRelayURL := fmt.Sprintf("ws://%s/", t.relayAddr)
+		wsRelayURL := fmt.Sprintf("%s://%s/", t.relayProto, t.relayAddr)
 		c, _, err := websocket.Dial(ctx, wsRelayURL, nil)
 		if err != nil {
 			fmt.Errorf("websocket.Dial failed")
