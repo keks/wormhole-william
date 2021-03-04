@@ -16,7 +16,6 @@ func main() {
 	js.Global().Set("client_sendFile", js.FuncOf(wasm.Client_SendFile))
 	js.Global().Set("client_recvText", js.FuncOf(wasm.Client_RecvText))
 	js.Global().Set("client_recvFile", js.FuncOf(wasm.Client_RecvFile))
-	js.Global().Set("client_withProgress", js.FuncOf(wasm.Client_withProgress))
 
 	// block to keep the wasm module API available
 	<-make(chan bool)
