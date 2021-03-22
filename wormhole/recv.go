@@ -285,6 +285,11 @@ type IncomingMessage struct {
 	readErr error
 }
 
+// Return true if the msg has finished being read.
+func (f *IncomingMessage) ReadDone() bool {
+	return f.readCount == f.UncompressedBytes64
+}
+
 // Read the decripted contents sent to this client.
 func (f *IncomingMessage) Read(p []byte) (int, error) {
 	if f.readErr != nil {

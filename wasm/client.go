@@ -31,7 +31,7 @@ func init() {
 	clientMap = make(ClientMap)
 }
 
-func NewClient(this js.Value, args []js.Value) interface{} {
+func NewClient(_ js.Value, args []js.Value) interface{} {
 	var (
 		config js.Value
 		object = js.Global().Get("Object")
@@ -64,6 +64,7 @@ func NewClient(this js.Value, args []js.Value) interface{} {
 	}
 
 	// read config with defaults merged
+	// TODO: need this?
 	appID = config.Get("appID")
 	rendezvousURL = config.Get("rendezvousURL")
 	transitRelayAddress = config.Get("transitRelayAddress")
@@ -203,17 +204,44 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		msgBytes, err := ioutil.ReadAll(msg)
-		if err != nil {
-			reject(err)
-			return
-		}
-
-			// TODO: something better!
-			jsData := js.Global().Get("Uint8Array").New(len(msgBytes))
-			js.CopyBytesToJS(jsData, msgBytes)
-			resolve(jsData)
+		resolve(NewFileStreamReader(msg))
 	})
+}
+
+func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
+	// TODO: make configurable / parameterized?
+	bufSize := 1024 * 4 // 4KiB
+
+	total := 0
+	readFunc := func(_ js.Value, args []js.Value) interface{} {
+		buf := make([]byte, bufSize)
+		return NewPromise(func(resolve ResolveFn, reject RejectFn) {
+			if len(args) != 1 {
+				reject(fmt.Errorf("invalid number of arguments: %d. expected: %d", len(args), 1))
+			}
+
+			jsBuf := args[0]
+			_resolve := func(n int, done bool) {
+				js.CopyBytesToJS(jsBuf, buf[:n])
+				resolve(js.Global().Get("Array").New(n, done))
+			}
+			n, err := msg.Read(buf)
+			total += n
+			if err != nil {
+				reject(err)
+				return
+			}
+			if msg.ReadDone() {
+				_resolve(n, true)
+				return
+			}
+			_resolve(n, false)
+		})
+	}
+	return js.Global().Get("FileStreamReader").New(bufSize, js.FuncOf(readFunc))
+
+	//TODO: refactor JS dependency injection
+	// NB: this requires that streamsaver is available at `window.StreamSaver`
 }
 
 func Client_free(_ js.Value, args []js.Value) interface{} {
