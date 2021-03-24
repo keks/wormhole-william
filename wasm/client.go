@@ -238,10 +238,9 @@ func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
 			_resolve(n, false)
 		})
 	}
-	return js.Global().Get("FileStreamReader").New(bufSize, js.FuncOf(readFunc))
-
 	//TODO: refactor JS dependency injection
 	// NB: this requires that streamsaver is available at `window.StreamSaver`
+	return js.Global().Get("FileStreamReader").New(bufSize, js.FuncOf(readFunc))
 }
 
 func Client_free(_ js.Value, args []js.Value) interface{} {

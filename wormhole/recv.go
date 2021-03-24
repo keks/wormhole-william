@@ -287,7 +287,7 @@ type IncomingMessage struct {
 
 // Return true if the msg has finished being read.
 func (f *IncomingMessage) ReadDone() bool {
-	return f.readCount == f.UncompressedBytes64
+	return f.readCount >= f.UncompressedBytes64
 }
 
 // Read the decripted contents sent to this client.
