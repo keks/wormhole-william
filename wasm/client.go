@@ -185,8 +185,8 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 	ctx := context.Background()
 
 	return NewPromise(func(resolve ResolveFn, reject RejectFn) {
-		if len(args) != 2 {
-			reject(fmt.Errorf("invalid number of arguments: %d. expected: %d", len(args), 2))
+		if len(args) != 2 && len(args) != 3 {
+			reject(fmt.Errorf("invalid number of arguments: %d. expected: %d or %d", len(args), 2, 3))
 			return
 		}
 
@@ -198,7 +198,16 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		msg, err := client.Receive(ctx, code)
+		var msg *wormhole.IncomingMessage
+		if len(args) == 3 && !args[2].IsUndefined() {
+			withProgress := wormhole.WithProgress(func(sentBytes int64, totalBytes int64) {
+				args[2].Invoke(sentBytes, totalBytes)
+			})
+			msg, err = client.Receive(ctx, code, withProgress)
+		} else {
+			fmt.Println("client.go:217| no")
+			msg, err = client.Receive(ctx, code)
+		}
 		if err != nil {
 			reject(err)
 			return
