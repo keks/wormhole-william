@@ -19,8 +19,8 @@ import (
 //
 // It returns an IncomingMessage with metadata about the payload being sent.
 // To read the contents of the message call IncomingMessage.Read().
-// TODO: refactor (don't use `SendOption` type)
-func (c *Client) Receive(ctx context.Context, code string, opts ...SendOption) (fr *IncomingMessage, returnErr error) {
+// TODO: refactor (don't use `TransferOption` type)
+func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOption) (fr *IncomingMessage, returnErr error) {
 	sideID := crypto.RandSideID()
 	appID := c.appID()
 	rc := rendezvous.NewClient(c.url(), sideID, appID)
@@ -288,7 +288,7 @@ type IncomingMessage struct {
 	cryptor   *transportCryptor
 	buf       []byte
 	readCount int64
-	options   sendOptions
+	options   transferOptions
 	sha256    hash.Hash
 
 	readErr error
