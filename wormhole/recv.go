@@ -19,7 +19,8 @@ import (
 //
 // It returns an IncomingMessage with metadata about the payload being sent.
 // To read the contents of the message call IncomingMessage.Read().
-func (c *Client) Receive(ctx context.Context, code string) (fr *IncomingMessage, returnErr error) {
+// TODO: refactor (don't use `SendOption` type)
+func (c *Client) Receive(ctx context.Context, code string, opts ...SendOption) (fr *IncomingMessage, returnErr error) {
 	sideID := crypto.RandSideID()
 	appID := c.appID()
 	rc := rendezvous.NewClient(c.url(), sideID, appID)
@@ -104,6 +105,12 @@ func (c *Client) Receive(ctx context.Context, code string) (fr *IncomingMessage,
 	}
 
 	fr = &IncomingMessage{}
+	for _, opt := range opts {
+		err := opt.setOption(&fr.options)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if offer.Message != nil {
 		answer := genericMessage{
@@ -281,6 +288,7 @@ type IncomingMessage struct {
 	cryptor   *transportCryptor
 	buf       []byte
 	readCount int64
+	options   sendOptions
 	sha256    hash.Hash
 
 	readErr error
@@ -373,6 +381,7 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	n := copy(p, f.buf)
 	f.buf = f.buf[n:]
 	f.readCount += int64(n)
+	f.updateProgress()
 	f.sha256.Write(p[:n])
 	if f.readCount >= f.TransferBytes64 {
 		f.readErr = io.EOF
@@ -389,4 +398,11 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	}
 
 	return n, nil
+}
+
+func (f *IncomingMessage) updateProgress() {
+	if f.options.progressFunc != nil {
+		// NB: f.readCount can be > f.UncompressedBytes64.
+		f.options.progressFunc(f.readCount, f.UncompressedBytes64)
+	}
 }
