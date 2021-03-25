@@ -1,11 +1,14 @@
 package wormhole
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"io"
 	"io/ioutil"
 	"net"
@@ -13,9 +16,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/klauspost/compress/zip"
+	"nhooyr.io/websocket"
 	"github.com/psanford/wormhole-william/rendezvous/rendezvousservertest"
 )
 
@@ -28,7 +30,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 	url := rs.WebSocketURL()
 
 	// disable transit relay
-	DefaultTransitRelayAddress = ""
+	DefaultTransitRelayUrl = ""
 
 	var c0Verifier string
 	var c0 Client
@@ -159,7 +161,7 @@ func TestVerifierAbort(t *testing.T) {
 	url := rs.WebSocketURL()
 
 	// disable transit relay
-	DefaultTransitRelayAddress = ""
+	DefaultTransitRelayUrl = ""
 
 	var c0 Client
 	c0.RendezvousURL = url
@@ -202,7 +204,7 @@ func TestWormholeFileReject(t *testing.T) {
 	url := rs.WebSocketURL()
 
 	// disable transit relay for this test
-	DefaultTransitRelayAddress = ""
+	DefaultTransitRelayUrl = ""
 
 	var c0 Client
 	c0.RendezvousURL = url
@@ -247,16 +249,16 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 	testDisableLocalListener = true
 	defer func() { testDisableLocalListener = false }()
 
-	relayServer := newTestRelayServer()
+	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
 
 	var c0 Client
 	c0.RendezvousURL = url
-	c0.TransitRelayAddress = relayServer.addr
+	c0.TransitRelayURL = "tcp:" + relayServer.addr
 
 	var c1 Client
 	c1.RendezvousURL = url
-	c1.TransitRelayAddress = relayServer.addr
+	c1.TransitRelayURL = "tcp:" + relayServer.addr
 
 	fileContent := make([]byte, 1<<16)
 	for i := 0; i < len(fileContent); i++ {
@@ -301,16 +303,16 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 	testDisableLocalListener = true
 	defer func() { testDisableLocalListener = false }()
 
-	relayServer := newTestRelayServer()
+	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
 
 	var c0 Client
 	c0.RendezvousURL = url
-	c0.TransitRelayAddress = relayServer.addr
+	c0.TransitRelayURL = "tcp:" + relayServer.addr
 
 	var c1 Client
 	c1.RendezvousURL = url
-	c1.TransitRelayAddress = relayServer.addr
+	c1.TransitRelayURL = "tcp:" + relayServer.addr
 
 	// Create a fake file offer
 	var fakeBigSize int64 = 32098461509
@@ -469,7 +471,7 @@ func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
 	url := rs.WebSocketURL()
 
 	// disable transit relay for this test
-	DefaultTransitRelayAddress = ""
+	DefaultTransitRelayUrl = ""
 
 	var c0Verifier string
 	var c0 Client
@@ -571,14 +573,16 @@ func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
 }
 
 type testRelayServer struct {
+	*httptest.Server
 	l       net.Listener
 	addr    string
+	proto   string
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	streams map[string]net.Conn
 }
 
-func newTestRelayServer() *testRelayServer {
+func newTestTCPRelayServer() *testRelayServer {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
 		panic(err)
@@ -587,6 +591,7 @@ func newTestRelayServer() *testRelayServer {
 	rs := &testRelayServer{
 		l:       l,
 		addr:    l.Addr().String(),
+		proto:   "tcp",
 		streams: make(map[string]net.Conn),
 	}
 
@@ -610,6 +615,38 @@ func (ts *testRelayServer) run() {
 		go ts.handleConn(conn)
 	}
 }
+
+func newTestWSRelayServer() *testRelayServer {
+	rs := &testRelayServer{
+		proto:   "ws",
+		streams: make(map[string]net.Conn),
+	}
+
+	smux := http.NewServeMux()
+	smux.HandleFunc("/", rs.handleWSRelay)
+
+	rs.Server = httptest.NewServer(smux)
+	rs.addr = rs.Server.Listener.Addr().String()
+	rs.l = rs.Server.Listener
+
+	return rs
+}
+
+func (rs *testRelayServer) handleWSRelay(w http.ResponseWriter, r *http.Request) {
+	c, err := websocket.Accept(w, r, nil)
+
+	if err != nil {
+		fmt.Printf("wormhole websocket accept: %v\n", err)
+		return
+	}
+	fmt.Printf("wormhole websocket upgrade succeeded\n")
+
+	ctx := context.Background()
+	conn := websocket.NetConn(ctx, c, websocket.MessageBinary)
+	rs.wg.Add(1)
+	go rs.handleConn(conn)
+}
+
 
 var headerPrefix = []byte("please relay ")
 var headerSide = []byte(" for side ")
@@ -659,6 +696,7 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	}
 
 	chanID := string(headerBuf)
+	fmt.Printf("wormhole chanID: %v\n", chanID)
 	if !isHex(chanID) {
 		return
 	}
@@ -679,6 +717,7 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 		return
 	}
 
+	fmt.Printf("wormhole Got side: %v\n", side)
 	// read \n
 	_, err = io.ReadFull(c, headerBuf[:1])
 	if err != nil {
@@ -694,6 +733,7 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	ts.mu.Unlock()
 
 	if found {
+		fmt.Printf("wormhole websocket server: ok\n")
 		existing.Write([]byte("ok\n"))
 		c.Write([]byte("ok\n"))
 		go func() {
@@ -709,23 +749,70 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	}
 }
 
-type splitReader struct {
-	*bytes.Reader
-	offset    int
-	cancelAt  int
-	cancel    func()
-	didCancel bool
+// test Client.getPrototol() function
+func TestRelayUrlProto(t *testing.T) {
+	var c Client;
+
+	DefaultTransitRelayUrl = "tcp:transit.magic-wormhole.io:8001"
+	p, err := c.getProtocol()
+	if err != nil {
+		t.Error(err)
+	}
+	if p != "tcp" {
+		t.Error(fmt.Sprintf("invalid protocol, expected tcp, got %v", p))
+	}
 }
 
-func (s *splitReader) Read(b []byte) (int, error) {
-	n, err := s.Reader.Read(b)
-	s.offset += n
-	if !s.didCancel && s.offset >= s.cancelAt {
-		s.cancel()
-		s.didCancel = true
-		// yield the cpu to give the cancellation goroutine a chance
-		// to run (esp important for when GOMAXPROCS=1)
-		time.Sleep(1 * time.Millisecond)
+func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
+	ctx := context.Background()
+
+	rs := rendezvousservertest.NewServer()
+	defer rs.Close()
+
+	url := rs.WebSocketURL()
+
+	testDisableLocalListener = true
+	defer func() { testDisableLocalListener = false }()
+
+	relayServer := newTestWSRelayServer()
+	defer relayServer.close()
+
+	var c0 Client
+	c0.RendezvousURL = url
+	c0.TransitRelayURL = fmt.Sprintf("ws://%s", relayServer.addr)
+
+	var c1 Client
+	c1.RendezvousURL = url
+	c1.TransitRelayURL = fmt.Sprintf("ws://%s", relayServer.addr)
+
+	fileContent := make([]byte, 1<<16)
+	for i := 0; i < len(fileContent); i++ {
+		fileContent[i] = byte(i)
 	}
-	return n, err
+
+	buf := bytes.NewReader(fileContent)
+
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receiver, err := c1.Receive(ctx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ioutil.ReadAll(receiver)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(got, fileContent) {
+		t.Fatalf("File contents mismatch")
+	}
+
+	result := <-resultCh
+	if !result.OK {
+		t.Fatalf("Expected ok result but got: %+v", result)
+	}
 }
