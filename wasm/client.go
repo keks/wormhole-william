@@ -17,7 +17,7 @@ type ClientMap = map[uintptr]*wormhole.Client
 
 // TODO: automate use of `-ld -X` with env vars
 const DEFAULT_APP_ID = "myFileTransfer"
-const DEFAULT_RENDEZVOUS_URL = "http://localhost:4000/v1"
+const DEFAULT_RENDEZVOUS_URL = "ws://localhost:4000/v1"
 const DEFAULT_TRANSIT_RELAY_ADDRESS = "ws://localhost:4002"
 const DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
 
@@ -218,7 +218,7 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 }
 
 func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
-	// TODO: make configurable / parameterized?
+	// TODO: parameterize
 	bufSize := 1024 * 4 // 4KiB
 
 	total := 0
@@ -249,7 +249,10 @@ func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
 	}
 	//TODO: refactor JS dependency injection
 	// NB: this requires that streamsaver is available at `window.StreamSaver`
-	return js.Global().Get("FileStreamReader").New(bufSize, js.FuncOf(readFunc))
+	readerObj := js.Global().Get("Object").New() //bufSize, js.FuncOf(readFunc))
+	readerObj.Set("size", bufSize)
+	readerObj.Set("read", js.FuncOf(readFunc))
+	return readerObj
 }
 
 func Client_free(_ js.Value, args []js.Value) interface{} {

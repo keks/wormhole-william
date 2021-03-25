@@ -151,7 +151,17 @@ func (c *Client) Receive(ctx context.Context, code string) (fr *IncomingMessage,
 	}
 
 	transitKey := deriveTransitKey(clientProto.sharedKey, appID)
-	transport := newFileTransport(transitKey, appID, c.relayAddr())
+	relayAddr, err := c.relayAddr()
+	if err != nil {
+		return nil, err
+	}
+
+	relayProto, err := c.getProtocol()
+	if err != nil {
+		return nil, err
+	}
+
+	transport := newFileTransport(transitKey, appID, relayProto, relayAddr)
 
 	transitMsg, err := transport.makeTransitMsg()
 	if err != nil {
@@ -276,6 +286,11 @@ type IncomingMessage struct {
 	readErr error
 
 	ctx context.Context
+}
+
+// Return true if the msg has finished being read.
+func (f *IncomingMessage) ReadDone() bool {
+	return f.readCount >= f.UncompressedBytes64
 }
 
 // Read the decrypted contents sent to this client.
