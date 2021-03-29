@@ -25,11 +25,11 @@ import (
 // It returns the nameplate+passphrase code to give to the receiver, a result chan
 // that gets written to once the receiver actually attempts to read the message
 // (either successfully or not).
-func (c *Client) SendText(ctx context.Context, msg string, opts ...SendOption) (string, chan SendResult, error) {
+func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
 	sideID := crypto.RandSideID()
 	appID := c.appID()
 
-	var options sendOptions
+	var options transferOptions
 	for _, opt := range opts {
 		err := opt.setOption(&options)
 		if err != nil {
@@ -184,8 +184,8 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...SendOption) (
 	return pwStr, ch, nil
 }
 
-func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Reader, opts ...SendOption) (string, chan SendResult, error) {
-	var options sendOptions
+func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Reader, opts ...TransferOption) (string, chan SendResult, error) {
+	var options transferOptions
 	for _, opt := range opts {
 		err := opt.setOption(&options)
 		if err != nil {
@@ -438,7 +438,7 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 // SendFile sends a single file via the wormhole protocol. It returns a nameplate+passhrase code to give to the
 // receiver, a result channel that will be written to after the receiver attempts to read (either successfully or not)
 // and an error if one occurred.
-func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker, opts ...SendOption) (string, chan SendResult, error) {
+func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker, opts ...TransferOption) (string, chan SendResult, error) {
 	size, err := readSeekerSize(r)
 	if err != nil {
 		return "", nil, err
@@ -472,7 +472,7 @@ type DirectoryEntry struct {
 // It returns a nameplate+passhrase code to give to the
 // receiver, a result channel that will be written to after the receiver attempts to read (either successfully or not)
 // and an error if one occurred.
-func (c *Client) SendDirectory(ctx context.Context, directoryName string, entries []DirectoryEntry, opts ...SendOption) (string, chan SendResult, error) {
+func (c *Client) SendDirectory(ctx context.Context, directoryName string, entries []DirectoryEntry, opts ...TransferOption) (string, chan SendResult, error) {
 	zipInfo, err := makeTmpZip(directoryName, entries)
 	if err != nil {
 		return "", nil, err
@@ -610,28 +610,6 @@ func readSeekerSize(r io.ReadSeeker) (int64, error) {
 
 }
 
-type sendOptions struct {
-	code         string
-	progressFunc progressFunc
-}
-
-type SendOption interface {
-	setOption(*sendOptions) error
-}
-
-type sendCodeOption struct {
-	code string
-}
-
-func (o sendCodeOption) setOption(opts *sendOptions) error {
-	if err := validateCode(o.code); err != nil {
-		return err
-	}
-
-	opts.code = o.code
-	return nil
-}
-
 func validateCode(code string) error {
 	if code == "" {
 		return nil
@@ -646,31 +624,3 @@ func validateCode(code string) error {
 	return nil
 }
 
-// WithCode returns a SendOption to use a specific nameplate+code
-// instead of generating one dynamically.
-func WithCode(code string) SendOption {
-	return sendCodeOption{code: code}
-}
-
-type progressFunc func(sentBytes int64, totalBytes int64)
-
-type progressSendOption struct {
-	progressFunc progressFunc
-}
-
-func (o progressSendOption) setOption(opts *sendOptions) error {
-	opts.progressFunc = o.progressFunc
-	return nil
-}
-
-// WithProgress returns a SendOption to track the progress of the data
-// transfer. It takes a callback function that will be called for each
-// chunk of data successfully written.
-//
-// WithProgress is only minimally supported in SendText. SendText does
-// not use the wormhole transit protocol so it is not able to detect
-// the progress of the receiver. This limitation does not apply to
-// SendFile or SendDirectory.
-func WithProgress(f func(sentBytes int64, totalBytes int64)) SendOption {
-	return progressSendOption{f}
-}

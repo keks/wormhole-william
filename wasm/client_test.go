@@ -4,13 +4,16 @@ package wasm
 
 import (
 	"context"
-	"fmt"
+	"regexp"
 	"syscall/js"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
-	wasmCtx context.Context
+	wasmCtx    context.Context
 	wasmCancel context.CancelFunc
 )
 
@@ -22,18 +25,34 @@ func TestMain(m *testing.M) {
 }
 
 func TestClient_SendText(t *testing.T) {
+	ctx, _ := context.WithDeadline(wasmCtx, time.Now().Add(3*time.Second))
+	text := "testing 123"
+
 	jsClientPtr := NewClientWrapper()
-	msg := "testing 123"
-	sendPromise := Client_SendText(js.Undefined(), []js.Value{jsClientPtr, js.ValueOf(msg)})
-	// TODO: make assertions
-	js.ValueOf(sendPromise).Call("then", js.FuncOf(func(_ js.Value, args[]js.Value) interface{} {
-		fmt.Println("client_test.go:17| TestClient_SendText!")
-		fmt.Printf("client_test.go:18| code: %s\n", args[0].String())
+	require.NotZero(t, jsClientPtr)
+
+	sendPromise := Client_SendText(js.Undefined(), []js.Value{jsClientPtr, js.ValueOf(text)})
+	require.NotNil(t, sendPromise)
+
+	_, ok := sendPromise.(*Promise)
+	require.True(t, ok)
+
+	resolved := false
+	js.ValueOf(sendPromise).Call("then", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+		resolved = true
+		require.Len(t, args, 1)
+		require.NotZero(t, args[0])
+
+		codeMatches, err := regexp.MatchString("\\d+(-\\w+)+", args[0].String())
+		require.NoError(t, err)
+		require.True(t, codeMatches)
+
 		wasmCancel()
 		return nil
 	}))
 
-	<- wasmCtx.Done()
+	<-ctx.Done()
+	require.True(t, resolved)
 }
 
 func NewClientWrapper() js.Value {
