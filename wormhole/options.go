@@ -1,8 +1,9 @@
 package wormhole
 
 type transferOptions struct {
-	code         string
-	progressFunc progressFunc
+	code           string
+	progressFunc   progressFunc
+	offerCondition offerCondition
 }
 
 type TransferOption interface {
@@ -49,4 +50,23 @@ func (o progressTransferOption) setOption(opts *transferOptions) error {
 // SendFile or SendDirectory.
 func WithProgress(f func(sentBytes int64, totalBytes int64)) TransferOption {
 	return progressTransferOption{f}
+}
+
+type offerCondition func(offer offerMsg) bool
+
+type conditionalOfferOption struct {
+	offerCondition offerCondition
+}
+
+func (opt conditionalOfferOption) setOption(inputOpt *transferOptions) error {
+	inputOpt.offerCondition = opt.offerCondition
+	return nil
+}
+
+// WithConditionalOfferOption stores an offer condition function which receives
+// the offer message and can return false to reject the transfer.
+func WithConditionalOfferOption(condition offerCondition) TransferOption {
+	return conditionalOfferOption{
+		offerCondition: condition,
+	}
 }

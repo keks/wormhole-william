@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"io"
 	"io/ioutil"
 	"net"
@@ -196,7 +197,7 @@ func TestVerifierAbort(t *testing.T) {
 	}
 }
 
-func TestWormholeFileReject(t *testing.T) {
+func TestWormholeFileRejectTransfer(t *testing.T) {
 	ctx := context.Background()
 
 	rs := rendezvousservertest.NewServer()
@@ -231,6 +232,56 @@ func TestWormholeFileReject(t *testing.T) {
 	}
 
 	receiver.Reject()
+
+	result := <-resultCh
+	expectErr := "TransferError: transfer rejected"
+	if result.Error.Error() != expectErr {
+		t.Fatalf("Expected %q result but got: %+v", expectErr, result)
+	}
+}
+
+func TestWormholeFileRejectOffer(t *testing.T) {
+	ctx := context.Background()
+
+	rs := rendezvousservertest.NewServer()
+	defer rs.Close()
+
+	url := rs.WebSocketURL()
+
+	// disable transit relay for this test
+	DefaultTransitRelayURL = ""
+
+	var c0 Client
+	c0.RendezvousURL = url
+
+	var c1 Client
+	c1.RendezvousURL = url
+
+	fileContent := make([]byte, 1<<16)
+	for i := 0; i < len(fileContent); i++ {
+		fileContent[i] = byte(i)
+	}
+
+	buf := bytes.NewReader(fileContent)
+
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conditionFnCalled := false
+	offerOpt := WithConditionalOfferOption(func(offer offerMsg) bool {
+		conditionFnCalled = true
+		// TODO: more assertions about offer
+		require.NotZero(t, offer)
+		return false
+	})
+	_, err = c1.Receive(ctx, code, offerOpt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	require.True(t, conditionFnCalled)
 
 	result := <-resultCh
 	expectErr := "TransferError: transfer rejected"

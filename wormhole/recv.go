@@ -97,17 +97,48 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 	}
 	defer collector.close()
 
+	fr = &IncomingMessage{}
+	for _, opt := range opts {
+		err := opt.setOption(&fr.options)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	reject := func() (initErr error) {
+		defer func() {
+			mood := rendezvous.Errory
+			if returnErr == nil {
+				mood = rendezvous.Happy
+			} else if returnErr == errDecryptFailed {
+				mood = rendezvous.Scary
+			}
+			rc.Close(ctx, mood)
+		}()
+
+		var errStr = "transfer rejected"
+		answer := &genericMessage{
+			Error: &errStr,
+		}
+		ctx := context.Background()
+
+		err = clientProto.WriteAppData(ctx, answer)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	var offer offerMsg
 	err = collector.waitFor(&offer)
 	if err != nil {
 		return nil, err
 	}
 
-	fr = &IncomingMessage{}
-	for _, opt := range opts {
-		err := opt.setOption(&fr.options)
-		if err != nil {
-			return nil, err
+	if fr.options.offerCondition != nil {
+		if !fr.options.offerCondition(offer) {
+			return nil, reject()
 		}
 	}
 
@@ -169,31 +200,6 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	reject := func() (initErr error) {
-		defer func() {
-			mood := rendezvous.Errory
-			if returnErr == nil {
-				mood = rendezvous.Happy
-			} else if returnErr == errDecryptFailed {
-				mood = rendezvous.Scary
-			}
-			rc.Close(ctx, mood)
-		}()
-
-		var errStr = "transfer rejected"
-		answer := &genericMessage{
-			Error: &errStr,
-		}
-		ctx := context.Background()
-
-		err = clientProto.WriteAppData(ctx, answer)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// defer actually sending the "ok" message until
