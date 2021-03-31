@@ -136,7 +136,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		}
 
 		offer := &genericMessage{
-			Offer: &offerMsg{
+			Offer: &OfferMsg{
 				Message: &msg,
 			},
 		}
@@ -184,7 +184,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 	return pwStr, ch, nil
 }
 
-func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Reader, opts ...TransferOption) (string, chan SendResult, error) {
+func (c *Client) sendFileDirectory(ctx context.Context, offer *OfferMsg, r io.Reader, opts ...TransferOption) (string, chan SendResult, error) {
 	var options transferOptions
 	for _, opt := range opts {
 		err := opt.setOption(&options)
@@ -444,7 +444,7 @@ func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker,
 		return "", nil, err
 	}
 
-	offer := &offerMsg{
+	offer := &OfferMsg{
 		File: &offerFile{
 			FileName: fileName,
 			FileSize: size,
@@ -478,7 +478,7 @@ func (c *Client) SendDirectory(ctx context.Context, directoryName string, entrie
 		return "", nil, err
 	}
 
-	offer := &offerMsg{
+	offer := &OfferMsg{
 		Directory: &offerDirectory{
 			Dirname:  directoryName,
 			Mode:     "zipfile/deflated",

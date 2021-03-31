@@ -277,6 +277,12 @@ func collectTransferOptions(jsOpts js.Value) []wormhole.TransferOption {
 			opts = append(opts, progressOpt)
 		}
 
+		offerCondition := jsOpts.Get("offerCondition")
+		if !offerCondition.IsUndefined() {
+			conditionalOfferOpt := withConditionalOffer(offerCondition)
+			opts = append(opts, conditionalOfferOpt)
+		}
+
 		jsCode := jsOpts.Get("code")
 		if !jsCode.IsUndefined() {
 			codeOpt := withCode(jsOpts)
@@ -294,4 +300,18 @@ func withProgress(progressFn js.Value) wormhole.TransferOption {
 
 func withCode(code js.Value) wormhole.TransferOption {
 	return wormhole.WithCode(code.String())
+}
+
+func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
+	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg) bool {
+		// TODO: cleanup
+		if !offerCondition.IsUndefined() {
+			offerObj := js.Global().Get("Object").New()
+			fmt.Printf("client.go:310| offer: %+v\n", offer.File)
+			offerObj.Set("name", offer.File.FileName)
+			offerObj.Set("size", offer.File.FileSize)
+			return offerCondition.Invoke(offerObj).Bool()
+		}
+		return true
+	})
 }

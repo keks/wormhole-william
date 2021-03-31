@@ -270,7 +270,7 @@ func TestWormholeFileRejectOffer(t *testing.T) {
 	}
 
 	conditionFnCalled := false
-	offerOpt := WithConditionalOfferOption(func(offer offerMsg) bool {
+	offerOpt := WithConditionalOfferOption(func(offer OfferMsg) bool {
 		conditionFnCalled = true
 		// TODO: more assertions about offer
 		require.NotZero(t, offer)
@@ -368,7 +368,7 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 
 	// Create a fake file offer
 	var fakeBigSize int64 = 32098461509
-	offer := &offerMsg{
+	offer := &OfferMsg{
 		File: &offerFile{
 			FileName: "fakefile",
 			FileSize: fakeBigSize,

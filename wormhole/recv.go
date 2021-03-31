@@ -130,7 +130,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		return nil
 	}
 
-	var offer offerMsg
+	var offer OfferMsg
 	err = collector.waitFor(&offer)
 	if err != nil {
 		return nil, err

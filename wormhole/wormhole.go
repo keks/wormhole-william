@@ -203,13 +203,13 @@ type pakeMsg struct {
 	Body string `json:"pake_v1"`
 }
 
-type offerMsg struct {
+type OfferMsg struct {
 	Message   *string         `json:"message,omitempty"`
 	Directory *offerDirectory `json:"directory,omitempty"`
 	File      *offerFile      `json:"file,omitempty"`
 }
 
-func (m *offerMsg) Type() collectType {
+func (m *OfferMsg) Type() collectType {
 	return collectOffer
 }
 
@@ -227,7 +227,7 @@ type offerFile struct {
 }
 
 type genericMessage struct {
-	Offer       *offerMsg       `json:"offer,omitempty"`
+	Offer       *OfferMsg       `json:"offer,omitempty"`
 	Answer      *answerMsg      `json:"answer,omitempty"`
 	Transit     *transitMsg     `json:"transit,omitempty"`
 	AppVersions *appVersionsMsg `json:"app_versions,omitempty"`
