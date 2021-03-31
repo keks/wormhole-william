@@ -136,12 +136,14 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		return nil, err
 	}
 
+	// TODO: I think this breaks recvText
 	if fr.options.offerCondition != nil {
-		if !fr.options.offerCondition(offer) {
-			return nil, reject()
-		}
+		offerCtx, accept := context.WithCancel(ctx)
+		fr.options.offerCondition(offer, accept, reject)
+		<- offerCtx.Done()
 	}
 
+	// TODO: move ?
 	if offer.Message != nil {
 		answer := genericMessage{
 			Answer: &answerMsg{

@@ -302,16 +302,29 @@ func withCode(code js.Value) wormhole.TransferOption {
 	return wormhole.WithCode(code.String())
 }
 
+
 func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
-	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg) bool {
+	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg, accept func(), reject func() error) {
+		jsAccept := js.FuncOf(func (_ js.Value, args []js.Value) interface{} {
+			accept()
+			return nil
+		})
+
+		jsReject := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+			return reject()
+		})
+
 		// TODO: cleanup
 		if !offerCondition.IsUndefined() {
 			offerObj := js.Global().Get("Object").New()
 			fmt.Printf("client.go:310| offer: %+v\n", offer.File)
-			offerObj.Set("name", offer.File.FileName)
-			offerObj.Set("size", offer.File.FileSize)
-			return offerCondition.Invoke(offerObj).Bool()
+			if offer.File != nil {
+				offerObj.Set("name", offer.File.FileName)
+				offerObj.Set("size", offer.File.FileSize)
+				offerCondition.Invoke(offerObj, jsAccept, jsReject)
+			} else {
+				fmt.Println("offer.File is nil!")
+			}
 		}
-		return true
 	})
 }
