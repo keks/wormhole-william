@@ -24,18 +24,6 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 	appID := c.appID()
 	rc := rendezvous.NewClient(c.url(), sideID, appID)
 
-	defer func() {
-		mood := rendezvous.Errory
-		if returnErr == nil {
-			// don't close our connection in this case
-			// wait until the user actually accepts the transfer
-			return
-		} else if returnErr == errDecryptFailed {
-			mood = rendezvous.Scary
-		}
-		rc.Close(ctx, mood)
-	}()
-
 	_, err := rc.Connect(ctx)
 	if err != nil {
 		return nil, err
@@ -105,7 +93,8 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		}
 	}
 
-	reject := func() (initErr error) {
+	// TODO: factor out -- only depends on `clientProto`.
+	reject := func() error {
 		defer func() {
 			mood := rendezvous.Errory
 			if returnErr == nil {
@@ -113,7 +102,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 			} else if returnErr == errDecryptFailed {
 				mood = rendezvous.Scary
 			}
-			rc.Close(ctx, mood)
+			clientProto.rc.Close(ctx, mood)
 		}()
 
 		var errStr = "transfer rejected"
@@ -129,6 +118,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 
 		return nil
 	}
+	fr.rejectTransfer = reject
 
 	var offer OfferMsg
 	err = collector.waitFor(&offer)
@@ -136,15 +126,8 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		return nil, err
 	}
 
-	// TODO: I think this breaks recvText
-	if fr.options.offerCondition != nil {
-		offerCtx, accept := context.WithCancel(ctx)
-		fr.options.offerCondition(offer, accept, reject)
-		<- offerCtx.Done()
-	}
-
-	// TODO: move ?
-	if offer.Message != nil {
+	switch {
+	case offer.Message != nil:
 		answer := genericMessage{
 			Answer: &answerMsg{
 				MessageAck: "ok",
@@ -161,7 +144,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		fr.Type = TransferText
 		fr.textReader = bytes.NewReader([]byte(*offer.Message))
 		return fr, nil
-	} else if offer.File != nil {
+	case offer.File != nil:
 		fr.Type = TransferFile
 		fr.Name = offer.File.FileName
 		fr.TransferBytes = int(offer.File.FileSize)
@@ -170,7 +153,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		fr.UncompressedBytes64 = offer.File.FileSize
 		fr.FileCount = 1
 		fr.ctx = ctx
-	} else if offer.Directory != nil {
+	case offer.Directory != nil:
 		fr.Type = TransferDirectory
 		fr.Name = offer.Directory.Dirname
 		fr.TransferBytes = int(offer.Directory.ZipSize)
@@ -179,7 +162,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		fr.UncompressedBytes64 = offer.Directory.NumBytes
 		fr.FileCount = int(offer.Directory.NumFiles)
 		fr.ctx = ctx
-	} else {
+	default:
 		return nil, errors.New("got non-file transfer offer")
 	}
 
@@ -192,31 +175,34 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 	transitKey := deriveTransitKey(clientProto.sharedKey, appID)
 	transport := newFileTransport(transitKey, appID, c.relayURL())
 
-	transitMsg, err := transport.makeTransitMsg()
-	if err != nil {
-		return nil, fmt.Errorf("make transit msg error: %s", err)
-	}
-
-	err = clientProto.WriteAppData(ctx, &genericMessage{
-		Transit: transitMsg,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// defer actually sending the "ok" message until
-	// the caller does a read on the IncomingMessage object.
-	acceptAndInitialize := func() (initErr error) {
+	sendTransitMsg := func() error {
 		defer func() {
 			mood := rendezvous.Errory
 			if returnErr == nil {
-				mood = rendezvous.Happy
+				// don't close our connection in this case
+				// wait until the user actually accepts the transfer
+				return
 			} else if returnErr == errDecryptFailed {
 				mood = rendezvous.Scary
 			}
 			rc.Close(ctx, mood)
 		}()
 
+		transitMsg, err := transport.makeTransitMsg()
+		if err != nil {
+			return fmt.Errorf("make transit msg error: %s", err)
+		}
+
+		err = clientProto.WriteAppData(ctx, &genericMessage{
+			Transit: transitMsg,
+		})
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	accept := func() error {
 		answer := &genericMessage{
 			Answer: &answerMsg{
 				FileAck: "ok",
@@ -224,11 +210,28 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		}
 		ctx := context.Background()
 
-		err = clientProto.WriteAppData(ctx, answer)
+		err := clientProto.WriteAppData(ctx, answer)
 		if err != nil {
 			return err
 		}
 
+		fr.transferAccepted = true
+
+		if err := sendTransitMsg(); err != nil {
+			return err
+		}
+		return nil
+	}
+	fr.acceptTransfer = accept
+
+	if fr.options.offerCondition != nil {
+		fr.options.offerCondition(offer, accept, reject)
+	}
+
+
+	// defer actually sending the "ok" message until
+	// the caller does a read on the IncomingMessage object.
+	initialize := func() error {
 		conn, err := transport.connectDirect(&gotTransitMsg)
 		if err != nil {
 			return err
@@ -251,9 +254,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		fr.sha256 = sha256.New()
 		return nil
 	}
-
-	fr.initializeTransfer = acceptAndInitialize
-	fr.rejectTransfer = reject
+	fr.initializeTransfer = initialize
 
 	return fr, nil
 }
@@ -279,7 +280,9 @@ type IncomingMessage struct {
 	textReader io.Reader
 
 	transferInitialized bool
+	transferAccepted    bool
 	initializeTransfer  func() error
+	acceptTransfer      func() error
 	rejectTransfer      func() error
 
 	cryptor   *transportCryptor
@@ -353,6 +356,18 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 			f.cryptor.Close()
 		}
 		return 0, err
+	}
+
+	if !f.transferAccepted {
+		if f.options.offerCondition != nil {
+			// TODO: refactor into var
+			return 0, errors.New("refusing to trasnfer: conditional offer has not yet been accepted by us")
+		}
+
+		f.transferAccepted = true
+		if err := f.acceptTransfer(); err != nil {
+			return 0, err
+		}
 	}
 
 	if !f.transferInitialized {

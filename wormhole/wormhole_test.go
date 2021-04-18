@@ -240,6 +240,10 @@ func TestWormholeFileRejectTransfer(t *testing.T) {
 	}
 }
 
+// TODO:
+// - [ ] With conditional offer, calling read without accepting should be an error.
+// - [ ] Without conditional offer, calling read without accepting explicitly, should accept implicitly.
+
 func TestWormholeFileRejectOffer(t *testing.T) {
 	ctx := context.Background()
 
@@ -270,11 +274,15 @@ func TestWormholeFileRejectOffer(t *testing.T) {
 	}
 
 	conditionFnCalled := false
-	offerOpt := WithConditionalOfferOption(func(offer OfferMsg) bool {
+	offerOpt := WithConditionalOfferOption(func(offer OfferMsg, accept func() error, reject func() error) {
 		conditionFnCalled = true
-		// TODO: more assertions about offer
+		// TODO: move accept/reject onto offer?
+		require.NotNil(t, accept)
+		require.NotNil(t, reject)
 		require.NotZero(t, offer)
-		return false
+
+		err := reject()
+		require.NoError(t, err)
 	})
 	_, err = c1.Receive(ctx, code, offerOpt)
 	if err != nil {

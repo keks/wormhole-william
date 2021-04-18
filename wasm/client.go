@@ -304,10 +304,9 @@ func withCode(code js.Value) wormhole.TransferOption {
 
 
 func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
-	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg, accept func(), reject func() error) {
+	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg, accept func() error, reject func() error) {
 		jsAccept := js.FuncOf(func (_ js.Value, args []js.Value) interface{} {
-			accept()
-			return nil
+			return accept()
 		})
 
 		jsReject := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {

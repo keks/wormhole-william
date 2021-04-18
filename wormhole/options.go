@@ -52,7 +52,7 @@ func WithProgress(f func(sentBytes int64, totalBytes int64)) TransferOption {
 	return progressTransferOption{f}
 }
 
-type offerCondition func(offer OfferMsg, accept func(), reject func() error)
+type offerCondition func(offer OfferMsg, accept func() error, reject func() error)
 
 type conditionalOfferOption struct {
 	offerCondition offerCondition
