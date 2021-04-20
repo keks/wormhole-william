@@ -304,13 +304,27 @@ func withCode(code js.Value) wormhole.TransferOption {
 
 
 func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
-	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg, accept func() error, reject func() error) {
+	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg,acceptTransfer func() error, rejectTransfer func() error) {
 		jsAccept := js.FuncOf(func (_ js.Value, args []js.Value) interface{} {
-			return accept()
+			return NewPromise(func(resolve ResolveFn, reject RejectFn) {
+				if err := acceptTransfer(); err != nil {
+					reject(err)
+					return
+				}
+				resolve(nil)
+				return
+			})
 		})
 
 		jsReject := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
-			return reject()
+			return NewPromise(func(resolve ResolveFn, reject RejectFn) {
+				if err := rejectTransfer(); err != nil {
+					reject(err)
+					return
+				}
+				resolve(nil)
+				return
+			})
 		})
 
 		// TODO: cleanup

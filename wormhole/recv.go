@@ -361,7 +361,7 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	if !f.transferAccepted {
 		if f.options.offerCondition != nil {
 			// TODO: refactor into var
-			return 0, errors.New("refusing to trasnfer: conditional offer has not yet been accepted by us")
+			return 0, errors.New("refusing to transfer: conditional offer has not yet been accepted by us")
 		}
 
 		f.transferAccepted = true
