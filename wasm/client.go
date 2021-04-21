@@ -327,16 +327,14 @@ func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
 			})
 		})
 
-		// TODO: cleanup
 		if !offerCondition.IsUndefined() {
 			offerObj := js.Global().Get("Object").New()
-			fmt.Printf("client.go:310| offer: %+v\n", offer.File)
 			if offer.File != nil {
 				offerObj.Set("name", offer.File.FileName)
 				offerObj.Set("size", offer.File.FileSize)
-				offerCondition.Invoke(offerObj, jsAccept, jsReject)
-			} else {
-				fmt.Println("offer.File is nil!")
+				offerObj.Set("accept", jsAccept)
+				offerObj.Set("reject", jsReject)
+				offerCondition.Invoke(offerObj)
 			}
 		}
 	})
