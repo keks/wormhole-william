@@ -5,6 +5,7 @@ package wasm
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"syscall/js"
@@ -137,12 +138,28 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			opts = collectTransferOptions(args[3])
 		}
 
-		code, _, err := client.SendFile(ctx, fileName, fileReader, opts...)
+		code, resultChan, err := client.SendFile(ctx, fileName, fileReader, opts...)
 		if err != nil {
 			reject(err)
 			return
 		}
-		resolve(code)
+
+		returnObj := js.Global().Get("Object").New()
+		returnObj.Set("code", code)
+		returnObj.Set("result", NewPromise(
+			func(resolve ResolveFn, reject RejectFn) {
+				result := <-resultChan
+				switch {
+				case result.Error != nil:
+					reject(result.Error)
+				case result.OK == true:
+					resolve(nil)
+				default:
+					reject(errors.New("unknown send result"))
+				}
+			}),
+		)
+		resolve(returnObj)
 	})
 }
 
@@ -302,10 +319,9 @@ func withCode(code js.Value) wormhole.TransferOption {
 	return wormhole.WithCode(code.String())
 }
 
-
 func withConditionalOffer(offerCondition js.Value) wormhole.TransferOption {
-	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg,acceptTransfer func() error, rejectTransfer func() error) {
-		jsAccept := js.FuncOf(func (_ js.Value, args []js.Value) interface{} {
+	return wormhole.WithConditionalOfferOption(func(offer wormhole.OfferMsg, acceptTransfer func() error, rejectTransfer func() error) {
+		jsAccept := js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
 			return NewPromise(func(resolve ResolveFn, reject RejectFn) {
 				if err := acceptTransfer(); err != nil {
 					reject(err)
