@@ -508,7 +508,7 @@ func (t *fileTransport) listenRelay() (err error) {
 	case "ws", "wss", "http", "https":
 		c, _, err := websocket.Dial(ctx, t.relayURL.String(), nil)
 		if err != nil {
-			fmt.Errorf("websocket.Dial failed")
+			return fmt.Errorf("websocket.Dial failed")
 		}
 		conn = websocket.NetConn(ctx, c, websocket.MessageBinary)
 	default:
