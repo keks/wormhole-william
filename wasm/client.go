@@ -19,7 +19,7 @@ type ClientMap = map[uintptr]*wormhole.Client
 // TODO: automate use of `-ld -X` with env vars
 const DEFAULT_APP_ID = "myFileTransfer"
 const DEFAULT_RENDEZVOUS_URL = "ws://localhost:4000/v1"
-const DEFAULT_TRANSIT_RELAY_ADDRESS = "ws://localhost:4002"
+const DEFAULT_TRANSIT_RELAY_URL = "ws://localhost:4002"
 const DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
 
 var (
@@ -46,7 +46,7 @@ func NewClient(_ js.Value, args []js.Value) interface{} {
 	// read from config
 	appID := config.Get("appID")
 	rendezvousURL := config.Get("rendezvousURL")
-	transitRelayAddress := config.Get("transitRelayAddress")
+	transitRelayURL := config.Get("transitRelayURL")
 	passPhraseComponentLength := config.Get("passPhraseComponentLength")
 
 	//overwrite config with defaults where falsy
@@ -57,8 +57,8 @@ func NewClient(_ js.Value, args []js.Value) interface{} {
 	if !rendezvousURL.Truthy() {
 		config.Set("rendezvousURL", DEFAULT_RENDEZVOUS_URL)
 	}
-	if !transitRelayAddress.Truthy() {
-		config.Set("transitRelayAddress", DEFAULT_TRANSIT_RELAY_ADDRESS)
+	if !transitRelayURL.Truthy() {
+		config.Set("transitRelayURL", DEFAULT_TRANSIT_RELAY_URL)
 	}
 	if !passPhraseComponentLength.Truthy() {
 		config.Set("passPhraseComponentLength", DEFAULT_PASSPHRASE_COMPONENT_LENGTH)
@@ -68,13 +68,13 @@ func NewClient(_ js.Value, args []js.Value) interface{} {
 	// TODO: need this?
 	appID = config.Get("appID")
 	rendezvousURL = config.Get("rendezvousURL")
-	transitRelayAddress = config.Get("transitRelayAddress")
+	transitRelayURL = config.Get("transitRelayURL")
 	passPhraseComponentLength = config.Get("passPhraseComponentLength")
 
 	client := &wormhole.Client{
 		AppID:                     appID.String(),
 		RendezvousURL:             rendezvousURL.String(),
-		TransitRelayURL:           transitRelayAddress.String(),
+		TransitRelayURL:           transitRelayURL.String(),
 		PassPhraseComponentLength: passPhraseComponentLength.Int(),
 	}
 	clientPtr := uintptr(unsafe.Pointer(client))
