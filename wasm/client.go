@@ -110,7 +110,7 @@ func Client_SendText(_ js.Value, args []js.Value) interface{} {
 }
 
 func Client_SendFile(_ js.Value, args []js.Value) interface{} {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return NewPromise(func(resolve ResolveFn, reject RejectFn) {
 		if len(args) != 3 && len(args) != 4 {
@@ -146,6 +146,10 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 
 		returnObj := js.Global().Get("Object").New()
 		returnObj.Set("code", code)
+		returnObj.Set("cancel", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
+			cancel()
+			return nil
+		}))
 		returnObj.Set("result", NewPromise(
 			func(resolve ResolveFn, reject RejectFn) {
 				result := <-resultChan
@@ -196,7 +200,7 @@ func Client_RecvText(_ js.Value, args []js.Value) interface{} {
 }
 
 func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return NewPromise(func(resolve ResolveFn, reject RejectFn) {
 		if len(args) != 2 && len(args) != 3 {
@@ -223,7 +227,12 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		resolve(NewFileStreamReader(msg))
+		readerObj := NewFileStreamReader(msg)
+		readerObj.Set("cancel", js.FuncOf(func(_ js.Value, args [] js.Value) interface {} {
+			cancel()
+			return nil
+		}))
+		resolve(readerObj)
 	})
 }
 
