@@ -150,7 +150,7 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			cancel()
 			return nil
 		}))
-		returnObj.Set("result", NewPromise(
+		returnObj.Set("done", NewPromise(
 			func(resolve ResolveFn, reject RejectFn) {
 				result := <-resultChan
 				switch {
@@ -266,9 +266,7 @@ func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
 			_resolve(n, false)
 		})
 	}
-	//TODO: refactor JS dependency injection
-	// NB: this requires that streamsaver is available at `window.StreamSaver`
-	readerObj := js.Global().Get("Object").New() //bufSize, js.FuncOf(readFunc))
+	readerObj := js.Global().Get("Object").New()
 	readerObj.Set("size", bufSize)
 	readerObj.Set("read", js.FuncOf(readFunc))
 	return readerObj
