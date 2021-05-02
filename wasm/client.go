@@ -291,7 +291,7 @@ func NewFileStreamReader(ctx context.Context, msg *wormhole.IncomingMessage) js.
 		})
 	}
 	readerObj := js.Global().Get("Object").New()
-	readerObj.Set("size", bufSize)
+	readerObj.Set("bufferSizeBytes", bufSize)
 	readerObj.Set("read", js.FuncOf(readFunc))
 	return readerObj
 }
