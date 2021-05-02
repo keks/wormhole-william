@@ -152,14 +152,22 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 		}))
 		returnObj.Set("done", NewPromise(
 			func(resolve ResolveFn, reject RejectFn) {
-				result := <-resultChan
-				switch {
-				case result.Error != nil:
-					reject(result.Error)
-				case result.OK == true:
-					resolve(nil)
-				default:
-					reject(errors.New("unknown send result"))
+				select {
+				case result := <-resultChan:
+					switch {
+					case result.Error != nil:
+						reject(result.Error)
+					case result.OK == true:
+						resolve(nil)
+					default:
+						reject(errors.New("unknown send result"))
+					}
+				case <-ctx.Done():
+					if err := ctx.Err(); err == nil {
+						resolve(nil)
+					} else {
+						reject(err)
+					}
 				}
 			}),
 		)
@@ -203,6 +211,14 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return NewPromise(func(resolve ResolveFn, reject RejectFn) {
+		// TODO: improve
+		go func() {
+			<-ctx.Done()
+			if err := ctx.Err(); err != nil {
+				reject(err)
+			}
+		}()
+
 		if len(args) != 2 && len(args) != 3 {
 			reject(fmt.Errorf("invalid number of arguments: %d. expected: %d or %d", len(args), 2, 3))
 			return
@@ -227,8 +243,8 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		readerObj := NewFileStreamReader(msg)
-		readerObj.Set("cancel", js.FuncOf(func(_ js.Value, args [] js.Value) interface {} {
+		readerObj := NewFileStreamReader(ctx, msg)
+		readerObj.Set("cancel", js.FuncOf(func(_ js.Value, args []js.Value) interface{} {
 			cancel()
 			return nil
 		}))
@@ -236,7 +252,7 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 	})
 }
 
-func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
+func NewFileStreamReader(ctx context.Context, msg *wormhole.IncomingMessage) js.Value {
 	// TODO: parameterize
 	bufSize := 1024 * 4 // 4KiB
 
@@ -244,6 +260,14 @@ func NewFileStreamReader(msg *wormhole.IncomingMessage) js.Value {
 	readFunc := func(_ js.Value, args []js.Value) interface{} {
 		buf := make([]byte, bufSize)
 		return NewPromise(func(resolve ResolveFn, reject RejectFn) {
+			// TODO: improve
+			go func() {
+				<-ctx.Done()
+				if err := ctx.Err(); err != nil {
+					reject(err)
+				}
+			}()
+
 			if len(args) != 1 {
 				reject(fmt.Errorf("invalid number of arguments: %d. expected: %d", len(args), 1))
 			}
