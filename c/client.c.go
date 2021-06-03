@@ -1,9 +1,13 @@
+//+build cgo
+
 package main
 
 import (
+	"context"
+	"fmt"
 	"github.com/psanford/wormhole-william/c/codes"
 	"github.com/psanford/wormhole-william/wormhole"
-	"unsafe"
+	"io/ioutil"
 )
 
 import "C"
@@ -20,10 +24,22 @@ const (
 	DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
 )
 
-var clientsMap = make(map[uintptr]*wormhole.Client)
+// TODO: figure out how to get uintptr key to work.
+type ClientsMap = map[int32]*wormhole.Client
+
+var (
+	ErrClientNotFound = fmt.Errorf("%s", "wormhole client not found")
+
+	clientsMap ClientsMap
+	clientIndex int32 = 0
+)
+
+func init() {
+	clientsMap = make(ClientsMap)
+}
 
 //export NewClient
-func NewClient() uintptr {
+func NewClient() int32 {
 	// TODO: receive config
 	client := &wormhole.Client{
 		AppID: DEFAULT_APP_ID,
@@ -32,24 +48,71 @@ func NewClient() uintptr {
 		PassPhraseComponentLength: DEFAULT_PASSPHRASE_COMPONENT_LENGTH,
 	}
 
-	ptr := uintptr(unsafe.Pointer(client))
-	clientsMap[ptr] = client
+	fmt.Printf("clientsMap: %+v\n", clientsMap)
+	clientIndex++
+	clientsMap[clientIndex] = client
+	fmt.Printf("clientsMap: %+v\n", clientsMap)
 
-	return ptr
+	return clientIndex
 }
 
 //export FreeClient
-func FreeClient(clientPtr uintptr) C.int {
-	if _, ok := clientsMap[clientPtr]; !ok {
-		return C.int(codes.ERR_NO_CLIENT)
+func FreeClient(clientIndex int32) int {
+	if _, err := getClient(clientIndex); err != nil {
+		return int(codes.ERR_NO_CLIENT)
 	}
-	delete(clientsMap, clientPtr)
-	return C.int(codes.OK)
+
+	delete(clientsMap, clientIndex)
+	return int(codes.OK)
 }
 
-// TODO: opts ...TransferOptions
-// TODO: r io.ReadSeeker
-////export ClientSendText
-//func ClientSendText(clientPtr uintptr, fileName string, ) int {
-//
-//}
+//export ClientSendText
+func ClientSendText(clientIndex int32, msgC *C.char, codeOutC **C.char) int {
+	client, err := getClient(clientIndex)
+	if err != nil {
+		return int(codes.ERR_NO_CLIENT)
+	}
+	ctx := context.Background()
+
+	code, _, err := client.SendText(ctx, C.GoString(msgC))
+	if err != nil {
+		return int(codes.ERR_SEND_TEXT)
+	}
+
+	*codeOutC = C.CString(code)
+	return int(codes.OK)
+}
+
+//export ClientRecvText
+func ClientRecvText(clientIndex int32, codeC *C.char, msgOutC **C.char) int {
+	client, err := getClient(clientIndex)
+	if err != nil {
+		return int(codes.ERR_NO_CLIENT)
+	}
+	ctx := context.Background()
+
+	msg, err := client.Receive(ctx, C.GoString(codeC))
+	if err != nil {
+		return int(codes.ERR_SEND_TEXT)
+	}
+
+	data, err := ioutil.ReadAll(msg)
+	if err != nil {
+		return int(codes.ERR_RECV_TEXT)
+	}
+
+	*msgOutC = C.CString(string(data))
+	return int(codes.OK)
+}
+
+// TODO: refactor w/ wasm package?
+func getClient(clientPtr int32) (*wormhole.Client, error) {
+	client, ok := clientsMap[clientPtr]
+	if !ok {
+		fmt.Printf("clientMap entry missing: %d\n", uintptr(clientPtr))
+		fmt.Printf("clientMap entry missing: %d\n", clientPtr)
+		return nil, ErrClientNotFound
+	}
+
+	return client, nil
+}
