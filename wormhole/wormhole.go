@@ -107,6 +107,7 @@ func openAndUnmarshal(v interface{}, mb rendezvous.MailboxEvent, sharedKey []byt
 		return errDecryptFailed
 	}
 
+	fmt.Printf("opened message: \n%s\n", string(out))
 	return json.Unmarshal(out, v)
 }
 
