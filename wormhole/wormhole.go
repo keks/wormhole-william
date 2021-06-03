@@ -67,6 +67,13 @@ var (
 	DefaultTransitRelayURL = "tcp:transit.magic-wormhole.io:4001"
 )
 
+func (c *Client) GetAppID() string {
+	if c.AppID != "" {
+		return c.AppID
+	}
+	return WormholeCLIAppID
+}
+
 func (c *Client) wordCount() int {
 	if c.PassPhraseComponentLength > 1 {
 		return c.PassPhraseComponentLength
@@ -107,7 +114,6 @@ func openAndUnmarshal(v interface{}, mb rendezvous.MailboxEvent, sharedKey []byt
 		return errDecryptFailed
 	}
 
-	fmt.Printf("opened message: \n%s\n", string(out))
 	return json.Unmarshal(out, v)
 }
 
