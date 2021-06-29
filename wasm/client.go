@@ -293,6 +293,8 @@ func NewFileStreamReader(ctx context.Context, msg *wormhole.IncomingMessage) js.
 	readerObj := js.Global().Get("Object").New()
 	readerObj.Set("bufferSizeBytes", bufSize)
 	readerObj.Set("read", js.FuncOf(readFunc))
+	readerObj.Set("name", msg.Name)
+	readerObj.Set("size", msg.UncompressedBytes64)
 	return readerObj
 }
 
@@ -303,7 +305,7 @@ func Client_free(_ js.Value, args []js.Value) interface{} {
 
 	clientPtr := uintptr(args[0].Int())
 	delete(clientMap, clientPtr)
-	return nil
+	return js.Undefined()
 }
 
 func getClient(clientPtr uintptr) (error, *wormhole.Client) {
