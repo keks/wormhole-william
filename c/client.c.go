@@ -74,12 +74,12 @@ func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char) int {
 	}
 	ctx := context.Background()
 
-	code, status, err := client.SendText(ctx, C.GoString(msgC))
+	code, _, err := client.SendText(ctx, C.GoString(msgC))
 	if err != nil {
 		log.Printf("%v\n", err)
 		return int(codes.ERR_SEND_TEXT)
 	}
-
+	fmt.Printf("code returned: %s\n", code)
 	*codeOutC = C.CString(code)
 	return int(codes.OK)
 }

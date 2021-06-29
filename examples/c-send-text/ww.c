@@ -6,13 +6,13 @@ int main(void) {
     void *client = (void *)NewClient();
 
     char *msg = "Hello world";
-    char *code = "42-foo-bar";
+    char code[100];
 
-    int r = ClientSendText(client, msg, &code);
+    int r = ClientSendText(client, msg, &code[0]);
     if (r < 0) {
         fprintf(stderr, "error sending text\n");
     }
-    fprintf(stderr, "ClientSendText returned %d\n", r);
+    fprintf(stderr, "ClientSendText returned the code %s\n", &code[0]);
 
     return 0;
 }
