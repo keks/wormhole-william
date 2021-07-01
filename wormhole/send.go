@@ -55,7 +55,7 @@ func (c *Client) CreateOrAttachMailbox(ctx context.Context, sideID string, appID
 	return pwStr, rc, nil
 }
 
-func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID string, appID string, code string, msg string, options transferOptions) (chan SendResult, error) {
+func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID string, appID string, code string, msg string, options *transferOptions) (chan SendResult, error) {
 	clientProto := newClientProtocol(ctx, rc, sideID, appID)
 
 	ch := make(chan SendResult, 1)
@@ -197,7 +197,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		return "", nil, err
 	}
 
-	ch, err := c.SendTextMsg(ctx, rc, sideID, appID, pwStr, msg, options)
+	ch, err := c.SendTextMsg(ctx, rc, sideID, appID, pwStr, msg, &options)
 
 	return pwStr, ch, nil
 }
