@@ -66,6 +66,25 @@ func FreeClient(clientPtr uintptr) int {
 	return int(codes.OK)
 }
 
+// return rendezvous client ptr and code if success or a null ptr
+// in case of failure.
+//export ClientGetCode
+func ClientGetCode(clientPtr uintptr, sideID *C.char, appID *C.char, codeOutC **C.char) uintptr {
+	client, err := getClient(clientPtr)
+	if err != nil {
+		return uintptr(0)
+	}
+	ctx := context.Background()
+
+	code, rc, err := client.CreateOrAttachMailbox(ctx, C.GoString(sideID), C.GoString(appID), "")
+	if err != nil {
+		return uintptr(0)
+	}
+
+	*codeOutC = C.CString(code)
+	return uintptr(unsafe.Pointer(rc))
+}
+
 //export ClientSendText
 func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char) int {
 	client, err := getClient(clientPtr)
