@@ -20,6 +20,41 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
+
+// returns a code
+func (c *Client) CreateOrAttachMailbox(ctx context.Context, sideID string, appID string, code string) (string, *rendezvous.Client, error) {
+
+	rc := rendezvous.NewClient(c.url(), sideID, appID)
+
+	_, err := rc.Connect(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var pwStr string
+	if code == "" {
+		nameplate, err := rc.CreateMailbox(ctx)
+		if err != nil {
+			return "", nil, err
+		}
+
+		pwStr = nameplate + "-" + wordlist.ChooseWords(c.wordCount())
+	} else {
+		pwStr = code
+		nameplate, err := nameplateFromCode(pwStr)
+		if err != nil {
+			return "", nil, err
+		}
+
+		err = rc.AttachMailbox(ctx, nameplate)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
+	return pwStr, rc, nil
+}
+
 // SendText sends a text message via the wormhole protocol.
 //
 // It returns the nameplate+passphrase code to give to the receiver, a result chan
@@ -37,32 +72,9 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		}
 	}
 
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
-
-	_, err := rc.Connect(ctx)
+	pwStr, rc, err := c.CreateOrAttachMailbox(ctx, sideID, appID, options.code)
 	if err != nil {
 		return "", nil, err
-	}
-
-	var pwStr string
-	if options.code == "" {
-		nameplate, err := rc.CreateMailbox(ctx)
-		if err != nil {
-			return "", nil, err
-		}
-
-		pwStr = nameplate + "-" + wordlist.ChooseWords(c.wordCount())
-	} else {
-		pwStr = options.code
-		nameplate, err := nameplateFromCode(pwStr)
-		if err != nil {
-			return "", nil, err
-		}
-
-		err = rc.AttachMailbox(ctx, nameplate)
-		if err != nil {
-			return "", nil, err
-		}
 	}
 
 	clientProto := newClientProtocol(ctx, rc, sideID, appID)
