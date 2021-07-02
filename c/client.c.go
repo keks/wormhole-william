@@ -29,15 +29,20 @@ const (
 
 // TODO: figure out how to get uintptr key to work.
 type ClientsMap = map[uintptr]*wormhole.Client
+type ContextMap = map[int]context.Context
 
 var (
 	ErrClientNotFound = fmt.Errorf("%s", "wormhole client not found")
 
 	clientsMap ClientsMap
+	contextMap ContextMap
+	ctxIndex   int
 )
 
 func init() {
 	clientsMap = make(ClientsMap)
+	contextMap = make(ContextMap)
+	ctxIndex = 0
 }
 
 //export NewClient
@@ -56,6 +61,19 @@ func NewClient() uintptr {
 	return clientPtr
 }
 
+//export NewContext
+func NewContext() C.int {
+	ctx := context.Background()
+	contextMap[ctxIndex] = ctx
+
+	return C.int(ctxIndex)
+}
+
+//export DeleteContext
+func DeleteContext(ctxIndex C.int) {
+	delete(contextMap, int(ctxIndex))
+}
+
 //export FreeClient
 func FreeClient(clientPtr uintptr) int {
 	if _, err := getClient(clientPtr); err != nil {
@@ -69,12 +87,12 @@ func FreeClient(clientPtr uintptr) int {
 // return rendezvous client ptr and code if success or a null ptr
 // in case of failure.
 //export ClientGetCode
-func ClientGetCode(clientPtr uintptr, sideID *C.char, appID *C.char, codeOutC **C.char) uintptr {
+func ClientGetCode(clientPtr uintptr, ctxIndex C.int, sideID *C.char, appID *C.char, codeOutC **C.char) uintptr {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return uintptr(0)
 	}
-	ctx := context.Background()
+	ctx := contextMap[int(ctxIndex)]
 
 	code, rc, err := client.CreateOrAttachMailbox(ctx, C.GoString(sideID), C.GoString(appID), "")
 	if err != nil {
@@ -86,20 +104,30 @@ func ClientGetCode(clientPtr uintptr, sideID *C.char, appID *C.char, codeOutC **
 }
 
 //export ClientSendText
-func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char) int {
+func ClientSendText(clientPtr uintptr, ctxIndex C.int, msgC *C.char, codeOutC **C.char) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
 	}
-	ctx := context.Background()
+	ctx := contextMap[int(ctxIndex)]
 
-	code, _, err := client.SendText(ctx, C.GoString(msgC))
+	code, status, err := client.SendText(ctx, C.GoString(msgC))
 	if err != nil {
 		log.Printf("%v\n", err)
 		return int(codes.ERR_SEND_TEXT)
 	}
 	fmt.Printf("code returned: %s\n", code)
 	*codeOutC = C.CString(code)
+
+	s := <-status
+	if s.Error != nil {
+		return int(-1)
+	} else if s.OK {
+		return int(0)
+	} else {
+		return int(-1)
+	}
+
 	return int(codes.OK)
 }
 

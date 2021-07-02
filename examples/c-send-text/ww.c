@@ -5,11 +5,12 @@
 
 int main(void) {
     void *client = (void *)NewClient();
+    int ctxIndex = NewContext();
 
     char *msg = "Hello world";
     char *code = (char *) malloc(sizeof(char) * 100);
 
-    int r = ClientSendText(client, msg, &code);
+    int r = ClientSendText(client, ctxIndex, msg, &code);
     if (r < 0) {
         fprintf(stderr, "error sending text\n");
     }
