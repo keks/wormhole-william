@@ -74,7 +74,7 @@ func (c *Client) url() string {
 	return DefaultRendezvousURL
 }
 
-func (c *Client) appID() string {
+func (c *Client) GetAppID() string {
 	if c.AppID != "" {
 		return c.AppID
 	}

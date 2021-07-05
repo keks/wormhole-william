@@ -182,7 +182,7 @@ func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID 
 // (either successfully or not).
 func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
 	sideID := crypto.RandSideID()
-	appID := c.appID()
+	appID := c.GetAppID()
 
 	var options transferOptions
 	for _, opt := range opts {
@@ -212,7 +212,7 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *OfferMsg, r io.Re
 	}
 
 	sideID := crypto.RandSideID()
-	appID := c.appID()
+	appID := c.GetAppID()
 	rc := rendezvous.NewClient(c.url(), sideID, appID)
 
 	_, err := rc.Connect(ctx)
