@@ -59,7 +59,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 	nameplate := strings.SplitN(code, "-", 2)[0]
 
 	// recv with wrong code
-	_, err = c1.Receive(ctx, fmt.Sprintf("%s-intermarrying-aliased", nameplate))
+	_, err = c1.Receive(ctx, fmt.Sprintf("%s-intermarrying-aliased", nameplate), false)
 	if err != errDecryptFailed {
 		t.Fatalf("Recv side expected decrypt failed due to wrong code but got: %s", err)
 	}
@@ -75,7 +75,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 	}
 
 	// recv with correct code
-	msg, err := c1.Receive(ctx, code)
+	msg, err := c1.Receive(ctx, code, false)
 	if err != nil {
 		t.Fatalf("Recv side got unexpected err: %s", err)
 	}
@@ -118,7 +118,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 	}
 
 	// recv with correct code
-	msg, err = c1.Receive(ctx, code)
+	msg, err = c1.Receive(ctx, code, false)
 	if err != nil {
 		t.Fatalf("Recv side got unexpected err: %s", err)
 	}
@@ -184,7 +184,7 @@ func TestVerifierAbort(t *testing.T) {
 	}
 
 	// recv with correct code
-	_, err = c1.Receive(ctx, code)
+	_, err = c1.Receive(ctx, code, false)
 	expectErr := errors.New("TransferError: sender rejected verification check, abandoned transfer")
 	if err.Error() != expectErr.Error() {
 		t.Fatalf("Expected recv err %q got %q", expectErr, err)
@@ -221,12 +221,12 @@ func TestWormholeFileRejectTransfer(t *testing.T) {
 
 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestWormholeFileRejectOffer(t *testing.T) {
 
 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestWormholeFileRejectOffer(t *testing.T) {
 		err := reject()
 		require.NoError(t, err)
 	})
-	_, err = c1.Receive(ctx, code, offerOpt)
+	_, err = c1.Receive(ctx, code, false, offerOpt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,9 +306,6 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 
 	url := rs.WebSocketURL()
 
-	testDisableLocalListener = true
-	defer func() { testDisableLocalListener = false }()
-
 	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
 
@@ -327,12 +324,12 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 
 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,9 +357,6 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 
 	url := rs.WebSocketURL()
 
-	testDisableLocalListener = true
-	defer func() { testDisableLocalListener = false }()
-
 	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
 
@@ -387,13 +381,13 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 	r := bytes.NewReader(make([]byte, 1))
 
 	// skip th wrapper so we can provide our own offer
-	code, _, err := c0.sendFileDirectory(ctx, offer, r)
-	//c0.SendFile(ctx, "file.txt", buf)
+	code, _, err := c0.sendFileDirectory(ctx, offer, r, true)
+	//c0.SendFile(ctx, "file.txt", buf, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,9 +405,6 @@ func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
-
-	testDisableLocalListener = true
-	defer func() { testDisableLocalListener = false }()
 
 	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
@@ -433,7 +424,7 @@ func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
 
 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +432,7 @@ func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
 	childCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	receiver, err := c1.Receive(childCtx, code)
+	receiver, err := c1.Receive(childCtx, code, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,9 +465,6 @@ func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
 
 	url := rs.WebSocketURL()
 
-	testDisableLocalListener = true
-	defer func() { testDisableLocalListener = false }()
-
 	relayServer := newTestTCPRelayServer()
 	defer relayServer.close()
 
@@ -501,12 +489,12 @@ func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
 		cancel:   cancel,
 	}
 
-	code, resultCh, err := c0.SendFile(sendCtx, "file.txt", &splitR)
+	code, resultCh, err := c0.SendFile(sendCtx, "file.txt", &splitR, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,12 +561,12 @@ func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
 		},
 	}
 
-	code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries)
+	code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -821,9 +809,6 @@ func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
 
 	url := rs.WebSocketURL()
 
-	testDisableLocalListener = true
-	defer func() { testDisableLocalListener = false }()
-
 	relayServer := newTestWSRelayServer()
 	defer relayServer.close()
 
@@ -842,12 +827,12 @@ func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
 
 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	receiver, err := c1.Receive(ctx, code)
+	receiver, err := c1.Receive(ctx, code, true)
 	if err != nil {
 		t.Fatal(err)
 	}
