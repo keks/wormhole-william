@@ -62,7 +62,7 @@ func recvAction(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	msg, err := c.Receive(ctx, code)
+	msg, err := c.Receive(ctx, code, disableListener)
 	if err != nil {
 		log.Fatal(err)
 	}

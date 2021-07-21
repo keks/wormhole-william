@@ -160,20 +160,22 @@ func (d *transportCryptor) writeRecord(msg []byte) error {
 	return err
 }
 
-func newFileTransport(transitKey []byte, appID string, relayURL internal.SimpleURL) *fileTransport {
+func newFileTransport(transitKey []byte, appID string, relayURL internal.SimpleURL, disableListener bool) *fileTransport {
 	return &fileTransport{
-		transitKey: transitKey,
-		appID:      appID,
-		relayURL:   relayURL,
+		transitKey:      transitKey,
+		appID:           appID,
+		relayURL:        relayURL,
+		disableListener: disableListener,
 	}
 }
 
 type fileTransport struct {
-	listener   net.Listener
-	relayConn  net.Conn
-	relayURL   internal.SimpleURL
-	transitKey []byte
-	appID      string
+	disableListener bool
+	listener        net.Listener
+	relayConn       net.Conn
+	relayURL        internal.SimpleURL
+	transitKey      []byte
+	appID           string
 }
 
 func (t *fileTransport) connectViaRelay(otherTransit *transitMsg) (net.Conn, error) {
@@ -466,13 +468,11 @@ func (t *fileTransport) relayHandshakeHeader() []byte {
 	return []byte(fmt.Sprintf("please relay %x for side %s\n", out, sideID))
 }
 
-// Test option to disable local listeners
-var testDisableLocalListener bool
-
 func (t *fileTransport) listen() error {
-	if testDisableLocalListener {
+	if t.disableListener {
 		return nil
 	}
+
 	switch t.relayURL.Proto {
 	case "tcp":
 		l, err := net.Listen("tcp", ":0")

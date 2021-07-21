@@ -23,6 +23,7 @@ var (
 	transitHelper   string
 	verify          bool
 	hideProgressBar bool
+	disableListener bool
 )
 
 func Execute() error {
@@ -35,6 +36,8 @@ func Execute() error {
 	if transitHelper == "" {
 		transitHelper = os.Getenv("WORMHOLE_TRANSITSERVER_URL")
 	}
+
+	rootCmd.PersistentFlags().BoolVar(&disableListener, "no-listen", false, "(debug) don't open a listening socket for transit")
 
 	rootCmd.AddCommand(recvCommand())
 	rootCmd.AddCommand(sendCommand())
