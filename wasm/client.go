@@ -138,7 +138,7 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			opts = collectTransferOptions(args[3])
 		}
 
-		code, resultChan, err := client.SendFile(ctx, fileName, fileReader, opts...)
+		code, resultChan, err := client.SendFile(ctx, fileName, fileReader, true, opts...)
 		if err != nil {
 			reject(err)
 			return
@@ -192,7 +192,7 @@ func Client_RecvText(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		msg, err := client.Receive(ctx, code)
+		msg, err := client.Receive(ctx, code, true)
 		if err != nil {
 			reject(err)
 			return
@@ -237,7 +237,7 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			opts = collectTransferOptions(args[2])
 		}
 
-		msg, err := client.Receive(ctx, code, opts...)
+		msg, err := client.Receive(ctx, code, true, opts...)
 		if err != nil {
 			reject(err)
 			return
