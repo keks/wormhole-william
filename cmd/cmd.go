@@ -20,6 +20,7 @@ var rootCmd = &cobra.Command{
 
 var (
 	relayURL        string
+	transitHelper   string
 	verify          bool
 	hideProgressBar bool
 )
@@ -28,6 +29,11 @@ func Execute() error {
 	rootCmd.PersistentFlags().StringVar(&relayURL, "relay-url", "", "rendezvous relay to use")
 	if relayURL == "" {
 		relayURL = os.Getenv("WORMHOLE_RELAY_URL")
+	}
+
+	rootCmd.PersistentFlags().StringVar(&transitHelper, "transit-helper", "", "relay server url")
+	if transitHelper == "" {
+		transitHelper = os.Getenv("WORMHOLE_TRANSITSERVER_URL")
 	}
 
 	rootCmd.AddCommand(recvCommand())
