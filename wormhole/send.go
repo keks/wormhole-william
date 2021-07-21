@@ -27,7 +27,7 @@ import (
 // (either successfully or not).
 func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
 	sideID := crypto.RandSideID()
-	appID := c.appID()
+	appID := c.AppID
 
 	var options transferOptions
 	for _, opt := range opts {
@@ -37,7 +37,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		}
 	}
 
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	_, err := rc.Connect(ctx)
 	if err != nil {
@@ -194,8 +194,8 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *OfferMsg, r io.Re
 	}
 
 	sideID := crypto.RandSideID()
-	appID := c.appID()
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	appID := c.AppID
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	_, err := rc.Connect(ctx)
 	if err != nil {

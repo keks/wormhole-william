@@ -60,6 +60,7 @@ func sendCommand() *cobra.Command {
 
 func newClient() wormhole.Client {
 	c := wormhole.Client{
+		AppID:                     appID,
 		RendezvousURL:             relayURL,
 		TransitRelayURL:           transitHelper,
 		PassPhraseComponentLength: codeLen,

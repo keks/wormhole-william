@@ -21,8 +21,8 @@ import (
 // To read the contents of the message call IncomingMessage.Read().
 func (c *Client) Receive(ctx context.Context, code string, disableListener bool, opts ...TransferOption) (fr *IncomingMessage, returnErr error) {
 	sideID := crypto.RandSideID()
-	appID := c.appID()
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	appID := c.AppID
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	_, err := rc.Connect(ctx)
 	if err != nil {

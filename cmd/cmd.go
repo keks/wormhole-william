@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/psanford/wormhole-william/version"
+	"github.com/psanford/wormhole-william/wormhole"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ var rootCmd = &cobra.Command{
 }
 
 var (
+	appID           string
 	relayURL        string
 	transitHelper   string
 	verify          bool
@@ -27,17 +29,19 @@ var (
 )
 
 func Execute() error {
-	rootCmd.PersistentFlags().StringVar(&relayURL, "relay-url", "", "rendezvous relay to use")
+	rootCmd.PersistentFlags().StringVar(&relayURL, "relay-url", wormhole.DefaultRendezvousURL, "rendezvous relay to use")
 	if relayURL == "" {
 		relayURL = os.Getenv("WORMHOLE_RELAY_URL")
 	}
 
-	rootCmd.PersistentFlags().StringVar(&transitHelper, "transit-helper", "", "relay server url")
+	rootCmd.PersistentFlags().StringVar(&transitHelper, "transit-helper", wormhole.DefaultTransitRelayURL, "relay server url")
 	if transitHelper == "" {
 		transitHelper = os.Getenv("WORMHOLE_TRANSITSERVER_URL")
 	}
 
 	rootCmd.PersistentFlags().BoolVar(&disableListener, "no-listen", false, "(debug) don't open a listening socket for transit")
+
+	rootCmd.PersistentFlags().StringVar(&appID, "appid", wormhole.WormholeCLIAppID, "AppID to use")
 
 	rootCmd.AddCommand(recvCommand())
 	rootCmd.AddCommand(sendCommand())
