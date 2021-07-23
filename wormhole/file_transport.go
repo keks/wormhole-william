@@ -473,20 +473,12 @@ func (t *fileTransport) listen() error {
 		return nil
 	}
 
-	switch t.relayURL.Proto {
-	case "tcp":
-		l, err := net.Listen("tcp", ":0")
-		if err != nil {
-			return err
-		}
-
-		t.listener = l
-	case "ws", "wss", "http", "https":
-		t.listener = nil
-	default:
-		return fmt.Errorf("%w: %s", UnsupportedProtocolErr, t.relayURL.Proto)
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return err
 	}
 
+	t.listener = l
 	return nil
 }
 
