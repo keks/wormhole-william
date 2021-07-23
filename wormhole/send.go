@@ -336,6 +336,13 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *OfferMsg, r io.Re
 		}
 		defer collector.close()
 
+		var transitMsg transitMsg
+		err = collector.waitFor(&transitMsg)
+		if err != nil {
+			sendErr(err)
+			return
+		}
+
 		var answer answerMsg
 		err = collector.waitFor(&answer)
 		if err != nil {
