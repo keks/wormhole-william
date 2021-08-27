@@ -3,11 +3,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
+	"unsafe"
+
 	"github.com/psanford/wormhole-william/c/codes"
 	"github.com/psanford/wormhole-william/wormhole"
-	"io/ioutil"
 )
 
 import "C"
@@ -19,7 +22,7 @@ func main() {
 // TODO: refactor?
 const (
 	DEFAULT_APP_ID                      = "myFileTransfer"
-	DEFAULT_RENDEZVOUS_URL              = "ws://localhost:4000/v1"
+	DEFAULT_RENDEZVOUS_URL              = "tcp:transit.magic-wormhole.io:4001"
 	DEFAULT_TRANSIT_RELAY_URL           = "ws://localhost:4002"
 	DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
 )
@@ -30,7 +33,7 @@ type ClientsMap = map[int32]*wormhole.Client
 var (
 	ErrClientNotFound = fmt.Errorf("%s", "wormhole client not found")
 
-	clientsMap ClientsMap
+	clientsMap  ClientsMap
 	clientIndex int32 = 0
 )
 
@@ -42,9 +45,9 @@ func init() {
 func NewClient() int32 {
 	// TODO: receive config
 	client := &wormhole.Client{
-		AppID: DEFAULT_APP_ID,
-		RendezvousURL: DEFAULT_RENDEZVOUS_URL,
-		TransitRelayURL: DEFAULT_TRANSIT_RELAY_URL,
+		AppID:                     DEFAULT_APP_ID,
+		RendezvousURL:             DEFAULT_RENDEZVOUS_URL,
+		TransitRelayURL:           DEFAULT_TRANSIT_RELAY_URL,
 		PassPhraseComponentLength: DEFAULT_PASSPHRASE_COMPONENT_LENGTH,
 	}
 
@@ -75,6 +78,25 @@ func ClientSendText(clientIndex int32, msgC *C.char, codeOutC **C.char) int {
 	ctx := context.Background()
 
 	code, _, err := client.SendText(ctx, C.GoString(msgC))
+	if err != nil {
+		return int(codes.ERR_SEND_TEXT)
+	}
+
+	*codeOutC = C.CString(code)
+	return int(codes.OK)
+}
+
+//export ClientSendFile
+func ClientSendFile(clientIndex int32, fileName *C.char, length C.int, fileBytes unsafe.Pointer, codeOutC **C.char) int {
+	client, err := getClient(clientIndex)
+	if err != nil {
+		return int(codes.ERR_NO_CLIENT)
+	}
+	ctx := context.Background()
+
+	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
+
+	code, _, err := client.SendFile(ctx, C.GoString(fileName), reader)
 	if err != nil {
 		return int(codes.ERR_SEND_TEXT)
 	}
