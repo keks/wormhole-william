@@ -26,7 +26,7 @@ import (
 func TestWormholeSendRecvText(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -157,7 +157,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 func TestVerifierAbort(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -200,7 +200,7 @@ func TestVerifierAbort(t *testing.T) {
 func TestWormholeFileRejectTransfer(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -247,7 +247,7 @@ func TestWormholeFileRejectTransfer(t *testing.T) {
 func TestWormholeFileRejectOffer(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -301,7 +301,7 @@ func TestWormholeFileRejectOffer(t *testing.T) {
 func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -355,7 +355,7 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -407,7 +407,7 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -469,7 +469,7 @@ func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
 func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -525,7 +525,7 @@ func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
 func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()
@@ -816,7 +816,7 @@ func TestClient_relayURL_default(t *testing.T) {
 func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServer()
+	rs := rendezvousservertest.NewServerLegacy()
 	defer rs.Close()
 
 	url := rs.WebSocketURL()

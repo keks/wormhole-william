@@ -228,7 +228,6 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 		fr.options.offerCondition(offer, accept, reject)
 	}
 
-
 	// defer actually sending the "ok" message until
 	// the caller does a read on the IncomingMessage object.
 	initialize := func() error {

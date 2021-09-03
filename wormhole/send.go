@@ -623,4 +623,3 @@ func validateCode(code string) error {
 	}
 	return nil
 }
-
