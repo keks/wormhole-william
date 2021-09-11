@@ -69,7 +69,7 @@ func FreeClient(clientPtr uintptr) int {
 }
 
 //export ClientSendText
-func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.callback) int {
+func ClientSendText(ctxC *C.void, clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -88,11 +88,11 @@ func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.cal
 		s := <-status
 		if s.Error != nil {
 			// TODO: stick error message somewhere conventional for C to read.
-			C.call_callback(cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
 		} else if s.OK {
-			C.call_callback(cb, nil, C.int(codes.OK))
+			C.call_callback(ctxC, cb, nil, C.int(codes.OK))
 		} else {
-			C.call_callback(cb, nil, C.int(codes.ERR_UNKNOWN))
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_UNKNOWN))
 		}
 	}()
 
@@ -100,7 +100,7 @@ func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.cal
 }
 
 //export ClientSendFile
-func ClientSendFile(clientPtr uintptr, fileName *C.char, length C.int, fileBytes *C.int, codeOutC **C.char, cb C.callback) int {
+func ClientSendFile(ctxC *C.void, clientPtr uintptr, fileName *C.char, length C.int, fileBytes *C.int, codeOutC **C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -119,11 +119,11 @@ func ClientSendFile(clientPtr uintptr, fileName *C.char, length C.int, fileBytes
 		s := <-status
 		if s.Error != nil {
 			// TODO: stick error message somewhere conventional for C to read.
-			C.call_callback(cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
 		} else if s.OK {
-			C.call_callback(cb, nil, C.int(codes.OK))
+			C.call_callback(ctxC, cb, nil, C.int(codes.OK))
 		} else {
-			C.call_callback(cb, nil, C.int(codes.ERR_UNKNOWN))
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_UNKNOWN))
 		}
 	}()
 
