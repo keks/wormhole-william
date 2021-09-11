@@ -1,11 +1,19 @@
-# include <stdint.h>
+#include <stdint.h>
 
+#ifndef CLIENT_INCLUDED
+#define CLIENT_INCLUDED
 typedef struct client_config {
-    char *app_id;
-    char *rendezvous_url;
-    char *transit_relay_url;
-    int32_t passphrase_length;
+  char *app_id;
+  char *rendezvous_url;
+  char *transit_relay_url;
+  int32_t passphrase_length;
 } client_config;
 
-typedef void (*callback)(void*, int32_t);
-void call_callback (callback cb, void *value, int32_t err_code);
+typedef void (*callback)(void *ctx, void *value, int32_t err_code);
+void call_callback(void *ctx, callback cb, void *value, int32_t err_code);
+#endif
+
+typedef struct {
+    int32_t length;
+    uint8_t *data;
+} file_t;
