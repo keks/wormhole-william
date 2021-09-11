@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -83,14 +84,48 @@ func ClientSendText(clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.cal
 	fmt.Printf("code returned: %s\n", code)
 	*codeOutC = C.CString(code)
 
-	s := <-status
-	if s.Error != nil {
-		C.call_callback(cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
-	} else if s.OK {
-		C.call_callback(cb, nil, C.int(codes.OK))
-	} else {
-		C.call_callback(cb, nil, C.int(codes.ERR_UNKNOWN))
+	go func() {
+		s := <-status
+		if s.Error != nil {
+			// TODO: stick error message somewhere conventional for C to read.
+			C.call_callback(cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
+		} else if s.OK {
+			C.call_callback(cb, nil, C.int(codes.OK))
+		} else {
+			C.call_callback(cb, nil, C.int(codes.ERR_UNKNOWN))
+		}
+	}()
+
+	return int(codes.OK)
+}
+
+//export ClientSendFile
+func ClientSendFile(clientPtr uintptr, fileName *C.char, length C.int, fileBytes *C.int, codeOutC **C.char, cb C.callback) int {
+	client, err := getClient(clientPtr)
+	if err != nil {
+		return int(codes.ERR_NO_CLIENT)
 	}
+	ctx := context.Background()
+
+	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
+
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader)
+	if err != nil {
+		return int(codes.ERR_SEND_TEXT)
+	}
+	*codeOutC = C.CString(code)
+
+	go func() {
+		s := <-status
+		if s.Error != nil {
+			// TODO: stick error message somewhere conventional for C to read.
+			C.call_callback(cb, nil, C.int(codes.ERR_SEND_TEXT_RESULT))
+		} else if s.OK {
+			C.call_callback(cb, nil, C.int(codes.OK))
+		} else {
+			C.call_callback(cb, nil, C.int(codes.ERR_UNKNOWN))
+		}
+	}()
 
 	return int(codes.OK)
 }
