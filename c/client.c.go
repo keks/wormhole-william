@@ -69,7 +69,7 @@ func FreeClient(clientPtr uintptr) int {
 }
 
 //export ClientSendText
-func ClientSendText(ctxC *C.void, clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.callback) int {
+func ClientSendText(ctxC unsafe.Pointer, clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -100,7 +100,7 @@ func ClientSendText(ctxC *C.void, clientPtr uintptr, msgC *C.char, codeOutC **C.
 }
 
 //export ClientSendFile
-func ClientSendFile(ctxC *C.void, clientPtr uintptr, fileName *C.char, length C.int, fileBytes *C.int, codeOutC **C.char, cb C.callback) int {
+func ClientSendFile(ctxC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, codeOutC **C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -131,7 +131,7 @@ func ClientSendFile(ctxC *C.void, clientPtr uintptr, fileName *C.char, length C.
 }
 
 //export ClientRecvText
-func ClientRecvText(clientPtr uintptr, codeC *C.char, cb C.callback) int {
+func ClientRecvText(clientPtr uintptr, clientCtx unsafe.Pointer, codeC *C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -141,15 +141,15 @@ func ClientRecvText(clientPtr uintptr, codeC *C.char, cb C.callback) int {
 	go func() {
 		msg, err := client.Receive(ctx, C.GoString(codeC))
 		if err != nil {
-			C.call_callback(cb, nil, C.int(codes.ERR_RECV_TEXT))
+			C.call_callback(clientCtx, cb, nil, C.int(codes.ERR_RECV_TEXT))
 		}
 
 		data, err := ioutil.ReadAll(msg)
 		if err != nil {
-			C.call_callback(cb, nil, C.int(codes.ERR_RECV_TEXT_DATA))
+			C.call_callback(clientCtx, cb, nil, C.int(codes.ERR_RECV_TEXT_DATA))
 		}
 
-		C.call_callback(cb, C.CString(string(data)), C.int(codes.OK))
+		C.call_callback(clientCtx, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
 	}()
 
 	return int(codes.OK)
