@@ -107,6 +107,7 @@ func ClientSendFile(ctxC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	}
 	ctx := context.Background()
 
+    // TODO: is there a way to avoid copying?
 	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
 
 	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader)
@@ -132,6 +133,40 @@ func ClientSendFile(ctxC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 
 //export ClientRecvText
 func ClientRecvText(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback) int {
+	client, err := getClient(clientPtr)
+	if err != nil {
+		return int(codes.ERR_NO_CLIENT)
+	}
+	ctx := context.Background()
+
+	go func() {
+		msg, err := client.Receive(ctx, C.GoString(codeC))
+
+		if err != nil {
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_RECV_TEXT))
+		}
+
+		data, err := ioutil.ReadAll(msg)
+		if err != nil {
+			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_RECV_TEXT_DATA))
+		}
+		dataC := C.CBytes(data)
+		fileC := (*C.file_t)(C.malloc(C.sizeof_file_t))
+		*fileC = C.file_t{
+		   length: C.int(len(data)),
+		   data: (*C.uint8_t)(dataC),
+		}
+		fmt.Printf("Go | client.c.go:158 fileC: %p/n", fileC);
+
+// 		C.call_callback(ctxC, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
+		C.call_callback(ctxC, cb, unsafe.Pointer(fileC), C.int(codes.OK))
+	}()
+
+	return int(codes.OK)
+}
+
+//export ClientRecvFile
+func ClientRecvFile(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
