@@ -125,7 +125,7 @@ func ClientSendFile(ctxC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	// TODO: is there a way to avoid copying?
 	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
 
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader)
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false)
 	if err != nil {
 		return int(codes.ERR_SEND_TEXT)
 	}
@@ -155,7 +155,7 @@ func ClientRecvText(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 	ctx := context.Background()
 
 	go func() {
-		msg, err := client.Receive(ctx, C.GoString(codeC))
+		msg, err := client.Receive(ctx, C.GoString(codeC), false)
 
 		if err != nil {
 			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_RECV_TEXT))
@@ -189,7 +189,7 @@ func ClientRecvFile(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 	ctx := context.Background()
 
 	go func() {
-		msg, err := client.Receive(ctx, C.GoString(codeC))
+		msg, err := client.Receive(ctx, C.GoString(codeC), false)
 
 		if err != nil {
 			C.call_callback(ctxC, cb, nil, C.int(codes.ERR_RECV_TEXT))
