@@ -43,13 +43,28 @@ func init() {
 }
 
 //export NewClient
-func NewClient() uintptr {
-	// TODO: receive config
+func NewClient(appId *C.char, rendezvousUrl *C.char, transitRelayUrl *C.char, passPhraseComponentLength C.int) uintptr {
 	client := &wormhole.Client{
-		AppID: DEFAULT_APP_ID,
-		RendezvousURL: DEFAULT_RENDEZVOUS_URL,
-		TransitRelayURL: DEFAULT_TRANSIT_RELAY_URL,
+		AppID:                     DEFAULT_APP_ID,
+		RendezvousURL:             DEFAULT_RENDEZVOUS_URL,
+		TransitRelayURL:           DEFAULT_TRANSIT_RELAY_URL,
 		PassPhraseComponentLength: DEFAULT_PASSPHRASE_COMPONENT_LENGTH,
+	}
+
+	if appId != nil {
+		client.AppID = C.GoString(appId)
+	}
+
+	if rendezvousUrl != nil {
+		client.RendezvousURL = C.GoString(rendezvousUrl)
+	}
+
+	if transitRelayUrl != nil {
+		client.TransitRelayURL = C.GoString(transitRelayUrl)
+	}
+
+	if passPhraseComponentLength == 0 {
+		client.PassPhraseComponentLength = int(passPhraseComponentLength)
 	}
 
 	clientPtr := uintptr(unsafe.Pointer(client))
@@ -107,7 +122,7 @@ func ClientSendFile(ctxC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	}
 	ctx := context.Background()
 
-    // TODO: is there a way to avoid copying?
+	// TODO: is there a way to avoid copying?
 	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
 
 	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader)
@@ -153,12 +168,12 @@ func ClientRecvText(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 		dataC := C.CBytes(data)
 		fileC := (*C.file_t)(C.malloc(C.sizeof_file_t))
 		*fileC = C.file_t{
-		   length: C.int(len(data)),
-		   data: (*C.uint8_t)(dataC),
+			length: C.int(len(data)),
+			data:   (*C.uint8_t)(dataC),
 		}
-		fmt.Printf("Go | client.c.go:158 fileC: %p/n", fileC);
+		fmt.Printf("Go | client.c.go:158 fileC: %p/n", fileC)
 
-// 		C.call_callback(ctxC, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
+		// 		C.call_callback(ctxC, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
 		C.call_callback(ctxC, cb, unsafe.Pointer(fileC), C.int(codes.OK))
 	}()
 
@@ -187,12 +202,12 @@ func ClientRecvFile(ctxC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 		dataC := C.CBytes(data)
 		fileC := (*C.file_t)(C.malloc(C.sizeof_file_t))
 		*fileC = C.file_t{
-		   length: C.int(len(data)),
-		   data: (*C.uint8_t)(dataC),
+			length: C.int(len(data)),
+			data:   (*C.uint8_t)(dataC),
 		}
-		fmt.Printf("Go | client.c.go:158 fileC: %p/n", fileC);
+		fmt.Printf("Go | client.c.go:158 fileC: %p/n", fileC)
 
-// 		C.call_callback(ctxC, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
+		// 		C.call_callback(ctxC, cb, unsafe.Pointer(C.CString(string(data))), C.int(codes.OK))
 		C.call_callback(ctxC, cb, unsafe.Pointer(fileC), C.int(codes.OK))
 	}()
 
