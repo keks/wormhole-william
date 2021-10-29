@@ -1,7 +1,6 @@
 package wormhole
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -14,7 +13,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/klauspost/compress/zip"
 	"github.com/psanford/wormhole-william/rendezvous/rendezvousservertest"
 )
 
@@ -137,7 +138,7 @@ func TestWormholeSendRecvText(t *testing.T) {
 	}
 
 	if progressCallCount != 1 {
-		t.Fatalf("progressCallCount got %d expected 1",progressCallCount)
+		t.Fatalf("progressCallCount got %d expected 1", progressCallCount)
 	}
 
 	if progressSentBytes != int64(len(msgBody)) {
@@ -287,7 +288,6 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 	if !result.OK {
 		t.Fatalf("Expected ok result but got: %+v", result)
 	}
-
 }
 
 func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
@@ -340,6 +340,124 @@ func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
 		t.Fatalf("Mismatch in size between what we are trying to send and what is (our parsed) offer. Expected %v but got %v", fakeBigSize, receiver.TransferBytes64)
 	}
 
+}
+
+func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
+	ctx := context.Background()
+
+	rs := rendezvousservertest.NewServer()
+	defer rs.Close()
+
+	url := rs.WebSocketURL()
+
+	testDisableLocalListener = true
+	defer func() { testDisableLocalListener = false }()
+
+	relayServer := newTestRelayServer()
+	defer relayServer.close()
+
+	var c0 Client
+	c0.RendezvousURL = url
+	c0.TransitRelayAddress = relayServer.addr
+
+	var c1 Client
+	c1.RendezvousURL = url
+	c1.TransitRelayAddress = relayServer.addr
+
+	fileContent := make([]byte, 1<<16)
+	for i := 0; i < len(fileContent); i++ {
+		fileContent[i] = byte(i)
+	}
+
+	buf := bytes.NewReader(fileContent)
+
+	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	childCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	receiver, err := c1.Receive(childCtx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initialBuffer := make([]byte, 1<<10)
+
+	_, err = io.ReadFull(receiver, initialBuffer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cancel()
+
+	_, err = ioutil.ReadAll(receiver)
+	if err == nil {
+		t.Fatalf("Expected read error but got none")
+	}
+
+	result := <-resultCh
+	if result.OK {
+		t.Fatalf("Expected error result but got ok")
+	}
+}
+
+func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
+	ctx := context.Background()
+
+	rs := rendezvousservertest.NewServer()
+	defer rs.Close()
+
+	url := rs.WebSocketURL()
+
+	testDisableLocalListener = true
+	defer func() { testDisableLocalListener = false }()
+
+	relayServer := newTestRelayServer()
+	defer relayServer.close()
+
+	var c0 Client
+	c0.RendezvousURL = url
+	c0.TransitRelayAddress = relayServer.addr
+
+	var c1 Client
+	c1.RendezvousURL = url
+	c1.TransitRelayAddress = relayServer.addr
+
+	fileContent := make([]byte, 1<<16)
+	for i := 0; i < len(fileContent); i++ {
+		fileContent[i] = byte(i)
+	}
+
+	sendCtx, cancel := context.WithCancel(ctx)
+
+	splitR := splitReader{
+		Reader:   bytes.NewReader(fileContent),
+		cancelAt: 1 << 10,
+		cancel:   cancel,
+	}
+
+	code, resultCh, err := c0.SendFile(sendCtx, "file.txt", &splitR)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	receiver, err := c1.Receive(ctx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ioutil.ReadAll(receiver)
+	if err == nil {
+		t.Fatal("Expected read error but got none")
+	}
+
+	result := <-resultCh
+	if result.OK {
+		t.Fatal("Expected send resultCh to error but got none")
+	}
 }
 
 func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
@@ -589,4 +707,25 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 		c.Close()
 		existing.Close()
 	}
+}
+
+type splitReader struct {
+	*bytes.Reader
+	offset    int
+	cancelAt  int
+	cancel    func()
+	didCancel bool
+}
+
+func (s *splitReader) Read(b []byte) (int, error) {
+	n, err := s.Reader.Read(b)
+	s.offset += n
+	if !s.didCancel && s.offset >= s.cancelAt {
+		s.cancel()
+		s.didCancel = true
+		// yield the cpu to give the cancellation goroutine a chance
+		// to run (esp important for when GOMAXPROCS=1)
+		time.Sleep(1 * time.Millisecond)
+	}
+	return n, err
 }

@@ -131,12 +131,12 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-			code, _, err := client.SendFile(ctx, fileName, fileReader)
-			if err != nil {
-				reject(err)
-				return
-			}
-			resolve(code)
+		code, _, err := client.SendFile(ctx, fileName, fileReader)
+		if err != nil {
+			reject(err)
+			return
+		}
+		resolve(code)
 	})
 }
 
@@ -201,10 +201,10 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-			// TODO: something better!
-			jsData := js.Global().Get("Uint8Array").New(MAX_FILE_SIZE)
-			js.CopyBytesToJS(jsData, msgBytes)
-			resolve(jsData)
+		// TODO: something better!
+		jsData := js.Global().Get("Uint8Array").New(MAX_FILE_SIZE)
+		js.CopyBytesToJS(jsData, msgBytes)
+		resolve(jsData)
 	})
 }
 
