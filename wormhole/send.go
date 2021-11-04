@@ -54,7 +54,7 @@ func (c *Client) CreateOrAttachMailbox(ctx context.Context, sideID string, appID
 	return pwStr, rc, nil
 }
 
-func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID string, appID string, code string, msg string, options *transferOptions) (chan SendResult, error) {
+func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID string, appID string, code string, msg string, options *sendOptions) (chan SendResult, error) {
 	clientProto := newClientProtocol(ctx, rc, sideID, appID)
 
 	ch := make(chan SendResult, 1)
@@ -179,11 +179,11 @@ func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID 
 // It returns the nameplate+passphrase code to give to the receiver, a result chan
 // that gets written to once the receiver actually attempts to read the message
 // (either successfully or not).
-func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
+func (c *Client) SendText(ctx context.Context, msg string, opts ...SendOption) (string, chan SendResult, error) {
 	sideID := crypto.RandSideID()
 	appID := c.GetAppID()
 
-	var options transferOptions
+	var options sendOptions
 	for _, opt := range opts {
 		err := opt.setOption(&options)
 		if err != nil {
