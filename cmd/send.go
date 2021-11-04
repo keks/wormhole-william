@@ -106,7 +106,7 @@ func sendFile(filename string) {
 
 	var bar *pb.ProgressBar
 
-	args := []wormhole.SendOption{
+	args := []wormhole.TransferOption{
 		wormhole.WithCode(codeFlag),
 	}
 

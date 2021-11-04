@@ -133,16 +133,12 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		var code string
-		var resultChan chan SendResult
-		if len(args) == 4 && !args[3].IsUndefined() {
-			withProgress := wormhole.WithProgress(func(sentBytes int64, totalBytes int64) {
-				args[3].Invoke(sentBytes, totalBytes)
-			})
-			code, resultChan, err = client.SendFile(ctx, fileName, fileReader, withProgress)
-		} else {
-			code, resultChan, err = client.SendFile(ctx, fileName, fileReader)
+		var opts []wormhole.TransferOption
+		if len(args) == 4 {
+			opts = collectTransferOptions(args[3])
 		}
+
+		code, resultChan, err := client.SendFile(ctx, fileName, fileReader, opts...)
 		if err != nil {
 			reject(err)
 			return
@@ -154,7 +150,7 @@ func Client_SendFile(_ js.Value, args []js.Value) interface{} {
 			cancel()
 			return nil
 		}))
-		returnObj.Set("result", NewPromise(
+		returnObj.Set("done", NewPromise(
 			func(resolve ResolveFn, reject RejectFn) {
 				select {
 				case result := <-resultChan:
@@ -236,15 +232,12 @@ func Client_RecvFile(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		var msg *wormhole.IncomingMessage
-		if len(args) == 3 && !args[2].IsUndefined() {
-			withProgress := wormhole.WithProgress(func(sentBytes int64, totalBytes int64) {
-				args[2].Invoke(sentBytes, totalBytes)
-			})
-			msg, err = client.Receive(ctx, code, withProgress)
-		} else {
-			msg, err = client.Receive(ctx, code)
+		var opts []wormhole.TransferOption
+		if len(args) == 3 {
+			opts = collectTransferOptions(args[2])
 		}
+
+		msg, err := client.Receive(ctx, code, opts...)
 		if err != nil {
 			reject(err)
 			return
@@ -325,4 +318,32 @@ func getClient(clientPtr uintptr) (error, *wormhole.Client) {
 	}
 
 	return nil, client
+}
+
+func collectTransferOptions(jsOpts js.Value) []wormhole.TransferOption {
+	var opts []wormhole.TransferOption
+	if !jsOpts.IsUndefined() {
+		progressFunc := jsOpts.Get("progressFunc")
+		if !progressFunc.IsUndefined() {
+			progressOpt := withProgress(progressFunc)
+			opts = append(opts, progressOpt)
+		}
+
+		jsCode := jsOpts.Get("code")
+		if !jsCode.IsUndefined() {
+			codeOpt := withCode(jsOpts)
+			opts = append(opts, codeOpt)
+		}
+	}
+	return opts
+}
+
+func withProgress(progressFn js.Value) wormhole.TransferOption {
+	return wormhole.WithProgress(func(sentBytes, totalBytes int64) {
+		progressFn.Invoke(sentBytes, totalBytes)
+	})
+}
+
+func withCode(code js.Value) wormhole.TransferOption {
+	return wormhole.WithCode(code.String())
 }
