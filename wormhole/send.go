@@ -20,7 +20,6 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-
 // returns a code
 func (c *Client) CreateOrAttachMailbox(ctx context.Context, sideID string, appID string, code string) (string, *rendezvous.Client, error) {
 
