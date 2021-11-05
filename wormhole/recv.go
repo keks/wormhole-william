@@ -19,10 +19,10 @@ import (
 //
 // It returns an IncomingMessage with metadata about the payload being sent.
 // To read the contents of the message call IncomingMessage.Read().
-func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOption) (fr *IncomingMessage, returnErr error) {
+func (c *Client) Receive(ctx context.Context, code string, disableListener bool, opts ...TransferOption) (fr *IncomingMessage, returnErr error) {
 	sideID := crypto.RandSideID()
-	appID := c.appID()
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	appID := c.AppID
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	defer func() {
 		mood := rendezvous.Errory
@@ -157,7 +157,7 @@ func (c *Client) Receive(ctx context.Context, code string, opts ...TransferOptio
 	}
 
 	transitKey := deriveTransitKey(clientProto.sharedKey, appID)
-	transport := newFileTransport(transitKey, appID, c.relayURL())
+	transport := newFileTransport(transitKey, appID, c.relayURL(), disableListener)
 
 	transitMsg, err := transport.makeTransitMsg()
 	if err != nil {

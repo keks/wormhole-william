@@ -280,7 +280,7 @@ func Client_RecvText(_ js.Value, args []js.Value) interface{} {
 			return
 		}
 
-		msg, err := client.Receive(ctx, code)
+		msg, err := client.Receive(ctx, code, true)
 		if err != nil {
 			reject(err)
 			return

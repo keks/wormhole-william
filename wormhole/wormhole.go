@@ -67,20 +67,6 @@ var (
 	DefaultTransitRelayURL = "tcp:transit.magic-wormhole.io:4001"
 )
 
-func (c *Client) url() string {
-	if c.RendezvousURL != "" {
-		return c.RendezvousURL
-	}
-	return DefaultRendezvousURL
-}
-
-func (c *Client) appID() string {
-	if c.AppID != "" {
-		return c.AppID
-	}
-	return WormholeCLIAppID
-}
-
 func (c *Client) wordCount() int {
 	if c.PassPhraseComponentLength > 1 {
 		return c.PassPhraseComponentLength

@@ -27,7 +27,7 @@ import (
 // (either successfully or not).
 func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
 	sideID := crypto.RandSideID()
-	appID := c.appID()
+	appID := c.AppID
 
 	var options transferOptions
 	for _, opt := range opts {
@@ -37,7 +37,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		}
 	}
 
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	_, err := rc.Connect(ctx)
 	if err != nil {
@@ -184,7 +184,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 	return pwStr, ch, nil
 }
 
-func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Reader, opts ...TransferOption) (string, chan SendResult, error) {
+func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Reader, disableListener bool, opts ...TransferOption) (string, chan SendResult, error) {
 	var options transferOptions
 	for _, opt := range opts {
 		err := opt.setOption(&options)
@@ -194,8 +194,8 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 	}
 
 	sideID := crypto.RandSideID()
-	appID := c.appID()
-	rc := rendezvous.NewClient(c.url(), sideID, appID)
+	appID := c.AppID
+	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
 	_, err := rc.Connect(ctx)
 	if err != nil {
@@ -293,7 +293,7 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 		}
 
 		transitKey := deriveTransitKey(clientProto.sharedKey, appID)
-		transport := newFileTransport(transitKey, appID, c.relayURL())
+		transport := newFileTransport(transitKey, appID, c.relayURL(), disableListener)
 		err = transport.listen()
 		if err != nil {
 			sendErr(err)
@@ -438,7 +438,7 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 // SendFile sends a single file via the wormhole protocol. It returns a nameplate+passhrase code to give to the
 // receiver, a result channel that will be written to after the receiver attempts to read (either successfully or not)
 // and an error if one occurred.
-func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker, opts ...TransferOption) (string, chan SendResult, error) {
+func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker, disableListener bool, opts ...TransferOption) (string, chan SendResult, error) {
 	size, err := readSeekerSize(r)
 	if err != nil {
 		return "", nil, err
@@ -451,7 +451,7 @@ func (c *Client) SendFile(ctx context.Context, fileName string, r io.ReadSeeker,
 		},
 	}
 
-	return c.sendFileDirectory(ctx, offer, r, opts...)
+	return c.sendFileDirectory(ctx, offer, r, disableListener, opts...)
 }
 
 // A DirectoryEntry represents a single file to be sent by SendDirectory
@@ -472,7 +472,7 @@ type DirectoryEntry struct {
 // It returns a nameplate+passhrase code to give to the
 // receiver, a result channel that will be written to after the receiver attempts to read (either successfully or not)
 // and an error if one occurred.
-func (c *Client) SendDirectory(ctx context.Context, directoryName string, entries []DirectoryEntry, opts ...TransferOption) (string, chan SendResult, error) {
+func (c *Client) SendDirectory(ctx context.Context, directoryName string, entries []DirectoryEntry, disableListener bool, opts ...TransferOption) (string, chan SendResult, error) {
 	zipInfo, err := makeTmpZip(directoryName, entries)
 	if err != nil {
 		return "", nil, err
@@ -488,7 +488,7 @@ func (c *Client) SendDirectory(ctx context.Context, directoryName string, entrie
 		},
 	}
 
-	code, resultCh, err := c.sendFileDirectory(ctx, offer, zipInfo.file, opts...)
+	code, resultCh, err := c.sendFileDirectory(ctx, offer, zipInfo.file, disableListener, opts...)
 	if err != nil {
 		return "", nil, err
 	}
