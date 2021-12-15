@@ -20,22 +20,8 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-// SendText sends a text message via the wormhole protocol.
-//
-// It returns the nameplate+passphrase code to give to the receiver, a result chan
-// that gets written to once the receiver actually attempts to read the message
-// (either successfully or not).
-func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
-	sideID := crypto.RandSideID()
-	appID := c.AppID
-
-	var options transferOptions
-	for _, opt := range opts {
-		err := opt.setOption(&options)
-		if err != nil {
-			return "", nil, err
-		}
-	}
+// returns a code
+func (c *Client) CreateOrAttachMailbox(ctx context.Context, sideID string, appID string, code string) (string, *rendezvous.Client, error) {
 
 	rc := rendezvous.NewClient(c.RendezvousURL, sideID, appID)
 
@@ -44,17 +30,15 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		return "", nil, err
 	}
 
-	var pwStr string
-	if options.code == "" {
+	if code == "" {
 		nameplate, err := rc.CreateMailbox(ctx)
 		if err != nil {
 			return "", nil, err
 		}
 
-		pwStr = nameplate + "-" + wordlist.ChooseWords(c.wordCount())
+		code = nameplate + "-" + wordlist.ChooseWords(c.wordCount())
 	} else {
-		pwStr = options.code
-		nameplate, err := nameplateFromCode(pwStr)
+		nameplate, err := nameplateFromCode(code)
 		if err != nil {
 			return "", nil, err
 		}
@@ -65,6 +49,10 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 		}
 	}
 
+	return code, rc, nil
+}
+
+func (c *Client) SendTextMsg(ctx context.Context, rc *rendezvous.Client, sideID string, appID string, code string, msg string, options *transferOptions) (chan SendResult, error) {
 	clientProto := newClientProtocol(ctx, rc, sideID, appID)
 
 	ch := make(chan SendResult, 1)
@@ -89,7 +77,7 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 			close(ch)
 		}
 
-		err = clientProto.WritePake(ctx, pwStr)
+		err := clientProto.WritePake(ctx, code)
 		if err != nil {
 			sendErr(err)
 			return
@@ -180,6 +168,33 @@ func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOptio
 			return
 		}
 	}()
+
+	return ch, nil
+}
+
+// SendText sends a text message via the wormhole protocol.
+//
+// It returns the nameplate+passphrase code to give to the receiver, a result chan
+// that gets written to once the receiver actually attempts to read the message
+// (either successfully or not).
+func (c *Client) SendText(ctx context.Context, msg string, opts ...TransferOption) (string, chan SendResult, error) {
+	sideID := crypto.RandSideID()
+	appID := c.AppID
+
+	var options transferOptions
+	for _, opt := range opts {
+		err := opt.setOption(&options)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+
+	pwStr, rc, err := c.CreateOrAttachMailbox(ctx, sideID, appID, options.code)
+	if err != nil {
+		return "", nil, err
+	}
+
+	ch, err := c.SendTextMsg(ctx, rc, sideID, appID, pwStr, msg, &options)
 
 	return pwStr, ch, nil
 }
