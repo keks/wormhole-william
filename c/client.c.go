@@ -6,9 +6,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"unsafe"
-
 	"io/ioutil"
+	"unsafe"
 
 	"github.com/psanford/wormhole-william/c/codes"
 	"github.com/psanford/wormhole-william/wormhole"
@@ -87,8 +86,16 @@ func codeGenResult(errorCode int, errorString string, code string) *C.codegen_re
 	codeGenResultC := (*C.codegen_result_t)(C.malloc(C.sizeof_codegen_result_t))
 	*codeGenResultC = C.codegen_result_t{
 		error_code:   C.int(errorCode),
-		error_string: C.CString(errorString),
-		code:         C.CString(code),
+		error_string: nil,
+		code:         nil,
+	}
+
+	if errorString != "" {
+		codeGenResultC.error_string = C.CString(errorString)
+	}
+
+	if code != "" {
+		codeGenResultC.code = C.CString(code)
 	}
 
 	return codeGenResultC
