@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"unsafe"
 
+	"io/ioutil"
+
 	"github.com/psanford/wormhole-william/c/codes"
 	"github.com/psanford/wormhole-william/wormhole"
-	"io/ioutil"
 )
 
 // #include <stdlib.h>
@@ -82,21 +83,31 @@ func FreeClient(clientPtr uintptr) int {
 	return int(codes.OK)
 }
 
+func codeGenResult(errorCode int, errorString string, code string) *C.codegen_result_t {
+	codeGenResultC := (*C.codegen_result_t)(C.malloc(C.sizeof_codegen_result_t))
+	*codeGenResultC = C.codegen_result_t{
+		error_code:   C.int(errorCode),
+		error_string: C.CString(errorString),
+		code:         C.CString(code),
+	}
+
+	return codeGenResultC
+}
+
 //export ClientSendText
-func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, codeOutC **C.char, cb C.callback) int {
+func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.callback) *C.codegen_result_t {
 	ctx := context.Background()
 	client, err := getClient(clientPtr)
 	if err != nil {
-		return int(codes.ERR_NO_CLIENT)
+		return codeGenResult(int(codes.ERR_NO_CLIENT), err.Error(), "")
 	}
 
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
 	code, status, err := client.SendText(ctx, C.GoString(msgC))
 	if err != nil {
-		return int(codes.ERR_SEND_TEXT)
+		return codeGenResult(int(codes.ERR_SEND_TEXT), err.Error(), "")
 	}
-	*codeOutC = C.CString(code)
 
 	go func() {
 		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
@@ -114,14 +125,14 @@ func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, codeOu
 		C.call_callback(ptrC, cb, resultC)
 	}()
 
-	return int(codes.OK)
+	return codeGenResult(int(codes.OK), "", code)
 }
 
 //export ClientSendFile
-func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, codeOutC **C.char, cb C.callback) int {
+func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, cb C.callback) *C.codegen_result_t {
 	client, err := getClient(clientPtr)
 	if err != nil {
-		return int(codes.ERR_NO_CLIENT)
+		return codeGenResult(int(codes.ERR_NO_CLIENT), err.Error(), "")
 	}
 	ctx := context.Background()
 
@@ -132,9 +143,8 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	//	This call blocks on network I/O with the mailbox.
 	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false)
 	if err != nil {
-		return int(codes.ERR_SEND_TEXT)
+		return codeGenResult(int(codes.ERR_SEND_TEXT), err.Error(), "")
 	}
-	*codeOutC = C.CString(code)
 
 	go func() {
 		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
@@ -152,7 +162,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 		C.call_callback(ptrC, cb, resultC)
 	}()
 
-	return int(codes.OK)
+	return codeGenResult(int(codes.OK), "", code)
 }
 
 //export ClientRecvText

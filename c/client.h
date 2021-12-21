@@ -22,7 +22,14 @@ typedef struct {
   char *received_text;
 } result_t;
 
+typedef struct {
+  int32_t error_code;
+  char *error_string;
+  char *code;
+} codegen_result_t;
+
 typedef void (*callback)(void *ptr, result_t *result);
 void call_callback(void *ptr, callback cb, result_t *result);
 void free_result(result_t *result);
+void free_codegen_result(codegen_result_t* result);
 #endif

@@ -32,3 +32,15 @@ void free_result(result_t *result) {
     free(result);
   }
 }
+
+void free_codegen_result(codegen_result_t *result) {
+  if (result != NULL) {
+    if (result->code != NULL) {
+      free(result->code);
+    }
+    if (result->error_string != NULL) {
+      free(result->error_string);
+    }
+    free(result);
+  }
+}
