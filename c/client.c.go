@@ -136,7 +136,7 @@ func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.c
 }
 
 //export ClientSendFile
-func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, cb C.callback) *C.codegen_result_t {
+func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, cb C.callback, pcb C.progress_callback) *C.codegen_result_t {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return codeGenResult(int(codes.ERR_NO_CLIENT), err.Error(), "")
@@ -146,9 +146,19 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	// TODO: is there a way to avoid copying?
 	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
 
+	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
+
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false)
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, wormhole.WithProgress(
+		func(sentBytes int64, totalBytes int64) {
+			*progress = C.progress_t{
+				sent_bytes:  C.long(sentBytes),
+				total_bytes: C.long(totalBytes),
+			}
+			C.update_progress(unsafe.Pointer(ptrC), pcb, progress)
+		}))
+
 	if err != nil {
 		return codeGenResult(int(codes.ERR_SEND_TEXT), err.Error(), "")
 	}
@@ -167,6 +177,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 			resultC.err_string = C.CString("Unknown error")
 		}
 		C.call_callback(ptrC, cb, resultC)
+		C.free(unsafe.Pointer(progress))
 	}()
 
 	return codeGenResult(int(codes.OK), "", code)

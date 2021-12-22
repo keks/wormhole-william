@@ -6,6 +6,10 @@ void call_callback(void *ptr, callback cb, result_t *result) {
   cb(ptr, result);
 }
 
+void update_progress(void *ptr, progress_callback pcb, progress_t *progress) {
+  pcb(ptr, progress);
+}
+
 void free_result(result_t *result) {
   /*debugf("Freeing result located at %p", result);*/
   if (result != NULL) {

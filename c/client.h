@@ -28,8 +28,16 @@ typedef struct {
   char *code;
 } codegen_result_t;
 
+typedef struct {
+  int64_t sent_bytes;
+  int64_t total_bytes;
+} progress_t;
+
 typedef void (*callback)(void *ptr, result_t *result);
+typedef void (*progress_callback)(void *ptr, progress_t *progress);
+
 void call_callback(void *ptr, callback cb, result_t *result);
+void update_progress(void *ptr, progress_callback cb, progress_t *progress);
 void free_result(result_t *result);
-void free_codegen_result(codegen_result_t* result);
+void free_codegen_result(codegen_result_t *result);
 #endif
