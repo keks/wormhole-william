@@ -153,8 +153,8 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, wormhole.WithProgress(
 		func(sentBytes int64, totalBytes int64) {
 			*progress = C.progress_t{
-				sent_bytes:  C.long(sentBytes),
-				total_bytes: C.long(totalBytes),
+				sent_bytes:  C.int64_t(sentBytes),
+				total_bytes: C.int64_t(totalBytes),
 			}
 			C.update_progress(unsafe.Pointer(ptrC), pcb, progress)
 		}))
