@@ -41,6 +41,17 @@ func init() {
 	clientsMap = make(ClientsMap)
 }
 
+func progressHandler(context unsafe.Pointer, progress *C.progress_t, pcb C.progress_callback) wormhole.TransferOption {
+	return wormhole.WithProgress(
+		func(done int64, total int64) {
+			*progress = C.progress_t{
+				transferred_bytes: C.int64_t(done),
+				total_bytes:       C.int64_t(total),
+			}
+			C.update_progress(unsafe.Pointer(context), pcb, progress)
+		})
+}
+
 //export NewClient
 func NewClient(appId *C.char, rendezvousUrl *C.char, transitRelayUrl *C.char, passPhraseComponentLength C.int) uintptr {
 	client := &wormhole.Client{
@@ -147,24 +158,22 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
 
 	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
+	whenComplete := func() {
+		C.free(unsafe.Pointer(progress))
+	}
 
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, wormhole.WithProgress(
-		func(sentBytes int64, totalBytes int64) {
-			*progress = C.progress_t{
-				sent_bytes:  C.int64_t(sentBytes),
-				total_bytes: C.int64_t(totalBytes),
-			}
-			C.update_progress(unsafe.Pointer(ptrC), pcb, progress)
-		}))
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(ptrC, progress, pcb))
 
 	if err != nil {
+		whenComplete()
 		return codeGenResult(int(codes.ERR_SEND_TEXT), err.Error(), "")
 	}
 
 	go func() {
 		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
+		defer whenComplete()
 		*resultC = C.result_t{}
 		s := <-status
 		if s.Error != nil {
@@ -177,7 +186,6 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 			resultC.err_string = C.CString("Unknown error")
 		}
 		C.call_callback(ptrC, cb, resultC)
-		C.free(unsafe.Pointer(progress))
 	}()
 
 	return codeGenResult(int(codes.OK), "", code)
@@ -219,7 +227,7 @@ func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 }
 
 //export ClientRecvFile
-func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback) int {
+func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback, pcb C.progress_callback) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -229,7 +237,9 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 	go func() {
 		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
 		*resultC = C.result_t{}
-		msg, err := client.Receive(ctx, C.GoString(codeC), false)
+		progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
+		defer C.free(unsafe.Pointer(progress))
+		msg, err := client.Receive(ctx, C.GoString(codeC), false, progressHandler(ptrC, progress, pcb))
 
 		if err != nil {
 			resultC.err_code = C.int(codes.ERR_RECV_FILE)

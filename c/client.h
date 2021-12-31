@@ -29,7 +29,7 @@ typedef struct {
 } codegen_result_t;
 
 typedef struct {
-  int64_t sent_bytes;
+  int64_t transferred_bytes;
   int64_t total_bytes;
 } progress_t;
 
