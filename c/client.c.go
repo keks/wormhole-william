@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -41,7 +40,7 @@ func init() {
 	clientsMap = make(ClientsMap)
 }
 
-func progressHandler(context unsafe.Pointer, progress *C.progress_t, pcb C.progress_callback) wormhole.TransferOption {
+func progressHandler(context unsafe.Pointer, progress *C.progress_t, pcb C.progress_cb) wormhole.TransferOption {
 	return wormhole.WithProgress(
 		func(done int64, total int64) {
 			*progress = C.progress_t{
@@ -113,7 +112,7 @@ func codeGenResult(errorCode int, errorString string, code string) *C.codegen_re
 }
 
 //export ClientSendText
-func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.callback) *C.codegen_result_t {
+func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.async_cb) *C.codegen_result_t {
 	ctx := context.Background()
 	client, err := getClient(clientPtr)
 	if err != nil {
@@ -147,19 +146,20 @@ func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.c
 }
 
 //export ClientSendFile
-func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, length C.int, fileBytes unsafe.Pointer, cb C.callback, pcb C.progress_callback) *C.codegen_result_t {
+func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char,
+	cb C.async_cb, pcb C.progress_cb, read C.readf, seek C.seekf) *C.codegen_result_t {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return codeGenResult(int(codes.ERR_NO_CLIENT), err.Error(), "")
 	}
 	ctx := context.Background()
 
-	// TODO: is there a way to avoid copying?
-	reader := bytes.NewReader(C.GoBytes(fileBytes, length))
+	reader := NewNativeReader(ptrC, read, seek)
 
 	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
 	whenComplete := func() {
 		C.free(unsafe.Pointer(progress))
+		reader.Close()
 	}
 
 	// TODO: return code asynchronously (i.e. from a go routine).
@@ -192,7 +192,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char, le
 }
 
 //export ClientRecvText
-func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback) int {
+func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.async_cb) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -227,7 +227,7 @@ func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 }
 
 //export ClientRecvFile
-func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.callback, pcb C.progress_callback) int {
+func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.async_cb, pcb C.progress_cb) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)

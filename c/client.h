@@ -33,11 +33,16 @@ typedef struct {
   int64_t total_bytes;
 } progress_t;
 
-typedef void (*callback)(void *ptr, result_t *result);
-typedef void (*progress_callback)(void *ptr, progress_t *progress);
+typedef void (*async_cb)(void *context, result_t *result);
+typedef void (*progress_cb)(void *context, progress_t *progress);
+typedef int (*readf)(void *context, uint8_t *buffer, int length);
+typedef int64_t (*seekf)(void *context, int64_t offset, int whence);
 
-void call_callback(void *ptr, callback cb, result_t *result);
-void update_progress(void *ptr, progress_callback cb, progress_t *progress);
+void call_callback(void *context, async_cb cb, result_t *result);
+void update_progress(void *context, progress_cb cb, progress_t *progress);
+int call_read(void *context, readf f, uint8_t *buffer, int length);
+int64_t call_seek(void *context, seekf f, int64_t offset, int whence);
+
 void free_result(result_t *result);
-void free_codegen_result(codegen_result_t *result);
+void free_codegen_result(codegen_result_t *codegen_result);
 #endif

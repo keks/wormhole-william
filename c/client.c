@@ -2,12 +2,20 @@
 
 #include <stdlib.h>
 
-void call_callback(void *ptr, callback cb, result_t *result) {
+void call_callback(void *ptr, async_cb cb, result_t *result) {
   cb(ptr, result);
 }
 
-void update_progress(void *ptr, progress_callback pcb, progress_t *progress) {
+void update_progress(void *ptr, progress_cb pcb, progress_t *progress) {
   pcb(ptr, progress);
+}
+
+int call_read(void *ctx, readf f, uint8_t *buffer, int length) {
+  return f(ctx, buffer, length);
+}
+
+int64_t call_seek(void *ctx, seekf f, int64_t offset, int whence) {
+  return f(ctx, offset, whence);
 }
 
 void free_result(result_t *result) {
