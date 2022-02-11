@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"unsafe"
 
@@ -28,12 +29,18 @@ const (
 	DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
 )
 
+const (
+	DOWNLOAD = 0
+	REJECT   = 1
+)
+
 type ClientsMap = map[uintptr]*wormhole.Client
 
 var (
 	ErrClientNotFound = fmt.Errorf("%s", "wormhole client not found")
 
-	clientsMap ClientsMap
+	clientsMap       ClientsMap
+	pendingDownloads map[int]chan int = map[int]chan int{}
 )
 
 func init() {
@@ -146,7 +153,7 @@ func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.a
 }
 
 //export ClientSendFile
-func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char,
+func ClientSendFile(nativeContext unsafe.Pointer, clientPtr uintptr, fileName *C.char,
 	cb C.async_cb, pcb C.progress_cb, read C.readf, seek C.seekf) *C.codegen_result_t {
 	client, err := getClient(clientPtr)
 	if err != nil {
@@ -154,7 +161,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char,
 	}
 	ctx := context.Background()
 
-	reader := NewNativeReader(ptrC, read, seek)
+	reader := NewNativeReader(nativeContext, read, seek)
 
 	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
 	whenComplete := func() {
@@ -164,7 +171,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char,
 
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(ptrC, progress, pcb))
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(nativeContext, progress, pcb))
 
 	if err != nil {
 		whenComplete()
@@ -185,7 +192,7 @@ func ClientSendFile(ptrC unsafe.Pointer, clientPtr uintptr, fileName *C.char,
 			resultC.err_code = C.int(codes.ERR_UNKNOWN)
 			resultC.err_string = C.CString("Unknown error")
 		}
-		C.call_callback(ptrC, cb, resultC)
+		C.call_callback(nativeContext, cb, resultC)
 	}()
 
 	return codeGenResult(int(codes.OK), "", code)
@@ -227,18 +234,20 @@ func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 }
 
 //export ClientRecvFile
-func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.async_cb, pcb C.progress_cb) int {
+func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char,
+	cb C.async_cb, pcb C.progress_cb, fmdcb C.file_metadata_cb, write C.writef) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
 	}
 	ctx := context.Background()
 
+	resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
+	*resultC = C.result_t{}
+	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
+	metadata := (*C.file_metadata_t)(C.malloc(C.sizeof_file_metadata_t))
+
 	go func() {
-		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
-		*resultC = C.result_t{}
-		progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
-		defer C.free(unsafe.Pointer(progress))
 		msg, err := client.Receive(ctx, C.GoString(codeC), false, progressHandler(ptrC, progress, pcb))
 
 		if err != nil {
@@ -248,24 +257,77 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 			return
 		}
 
-		data, err := ioutil.ReadAll(msg)
-		if err != nil {
-			resultC.err_code = C.int(codes.ERR_RECV_TEXT_DATA)
-			resultC.err_string = C.CString(err.Error())
+		metadata.length = C.int64_t(msg.UncompressedBytes64)
+		metadata.file_name = C.CString(msg.Name)
+		metadata.context = ptrC
+		metadata.download_id = C.int(len(pendingDownloads))
+
+		pendingDownloads[int(metadata.download_id)] = make(chan int)
+
+		fmt.Printf("Calling update metadata")
+
+		C.update_metadata(ptrC, fmdcb, metadata)
+
+		download := func() {
+			fmt.Printf("Download function called")
+			c_buffer := C.malloc(MAX_READ_BUFFER_LEN)
+			defer C.free(c_buffer)
+			defer C.free(unsafe.Pointer(progress))
+
+			buffer := make([]byte, MAX_READ_BUFFER_LEN)
+
+			var bytesRead int
+
+			// TODO maybe err == nil || bytesRead > 0 in case of EOF after reading some bytes?
+			for bytesRead, err = msg.Read(buffer); bytesRead > 0; bytesRead, err = msg.Read(buffer) {
+				for i := 0; i < bytesRead; i++ {
+					index := (*C.uint8_t)(unsafe.Pointer(uintptr(unsafe.Pointer(c_buffer)) + uintptr(i)))
+					*index = C.uint8_t(buffer[i])
+				}
+
+				C.call_write(ptrC, write, (*C.uint8_t)(c_buffer), C.int(bytesRead))
+			}
+
+			if err != nil && err != io.EOF {
+				resultC.err_code = C.int(codes.ERR_RECV_TEXT_DATA)
+				resultC.err_string = C.CString(err.Error())
+				C.call_callback(ptrC, cb, resultC)
+				return
+			}
+
+			resultC.err_code = C.int(codes.OK)
 			C.call_callback(ptrC, cb, resultC)
-			return
 		}
 
-		bytesC := C.CBytes(data)
-		fileC := (*C.file_t)(C.malloc(C.sizeof_file_t))
-		*fileC = C.file_t{
-			length: C.int(len(data)),
-			data:   (*C.uint8_t)(bytesC),
+		reject := func() {
+			msg.Reject()
+			resultC.err_code = C.int(codes.OK)
+			C.free(unsafe.Pointer(progress))
+			C.call_callback(ptrC, cb, resultC)
 		}
-		resultC.err_code = C.int(codes.OK)
-		resultC.file = fileC
-		resultC.file.file_name = C.CString(msg.Name)
-		C.call_callback(ptrC, cb, resultC)
+
+		go func() {
+			defer func() {
+				close(pendingDownloads[int(metadata.download_id)])
+				delete(pendingDownloads, int(metadata.download_id))
+			}()
+
+			response := <-pendingDownloads[int(metadata.download_id)]
+			switch response {
+			case DOWNLOAD:
+				download()
+				break
+			case REJECT:
+				reject()
+				break
+			default:
+				// TODO proper error code and string
+				resultC.err_code = C.int(1337)
+				resultC.err_string = C.CString("Invalid response. expecting either DOWNLOAD or REJECT")
+				C.call_callback(ptrC, cb, resultC)
+			}
+		}()
+
 	}()
 
 	return int(codes.OK)
@@ -281,4 +343,14 @@ func getClient(clientPtr uintptr) (*wormhole.Client, error) {
 	}
 
 	return client, nil
+}
+
+//export AcceptDownload
+func AcceptDownload(downloadId int) {
+	pendingDownloads[downloadId] <- DOWNLOAD
+}
+
+//export RejectDownload
+func RejectDownload(downloadId int) {
+	pendingDownloads[downloadId] <- REJECT
 }
