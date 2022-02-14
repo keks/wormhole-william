@@ -2,12 +2,18 @@
 
 #include <stdlib.h>
 
-void call_callback(void *ptr, async_cb cb, result_t *result) {
-  cb(ptr, result);
+void call_notify_result(void *ptr, notify_resultf f, result_t *result) {
+  f(ptr, result);
 }
 
-void update_progress(void *ptr, progress_cb pcb, progress_t *progress) {
+void call_update_progress(void *ptr, update_progressf pcb,
+                          progress_t *progress) {
   pcb(ptr, progress);
+}
+
+void call_update_metadata(void *context, update_metadataf mdf,
+                          file_metadata_t *metadata) {
+  return mdf(context, metadata);
 }
 
 int call_read(void *ctx, readf f, uint8_t *buffer, int length) {
@@ -18,12 +24,7 @@ int64_t call_seek(void *ctx, seekf f, int64_t offset, int whence) {
   return f(ctx, offset, whence);
 }
 
-void update_metadata(void *context, file_metadata_cb fmd_cb,
-                     file_metadata_t *metadata) {
-  return fmd_cb(context, metadata);
-}
-
-void call_write(void *ctx, writef f, uint8_t *buffer, int length) {
+int call_write(void *ctx, writef f, uint8_t *buffer, int length) {
   return f(ctx, buffer, length);
 }
 

@@ -47,14 +47,14 @@ func init() {
 	clientsMap = make(ClientsMap)
 }
 
-func progressHandler(context unsafe.Pointer, progress *C.progress_t, pcb C.progress_cb) wormhole.TransferOption {
+func progressHandler(context unsafe.Pointer, progress *C.progress_t, pcb C.update_progressf) wormhole.TransferOption {
 	return wormhole.WithProgress(
 		func(done int64, total int64) {
 			*progress = C.progress_t{
 				transferred_bytes: C.int64_t(done),
 				total_bytes:       C.int64_t(total),
 			}
-			C.update_progress(unsafe.Pointer(context), pcb, progress)
+			C.call_update_progress(unsafe.Pointer(context), pcb, progress)
 		})
 }
 
@@ -119,7 +119,7 @@ func codeGenResult(errorCode int, errorString string, code string) *C.codegen_re
 }
 
 //export ClientSendText
-func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.async_cb) *C.codegen_result_t {
+func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.notify_resultf) *C.codegen_result_t {
 	ctx := context.Background()
 	client, err := getClient(clientPtr)
 	if err != nil {
@@ -146,22 +146,22 @@ func ClientSendText(ptrC unsafe.Pointer, clientPtr uintptr, msgC *C.char, cb C.a
 			resultC.err_code = C.int(codes.ERR_UNKNOWN)
 			resultC.err_string = C.CString(codes.ERR_UNKNOWN.String())
 		}
-		C.call_callback(ptrC, cb, resultC)
+		C.call_notify_result(ptrC, cb, resultC)
 	}()
 
 	return codeGenResult(int(codes.OK), "", code)
 }
 
 //export ClientSendFile
-func ClientSendFile(nativeContext unsafe.Pointer, clientPtr uintptr, fileName *C.char,
-	cb C.async_cb, pcb C.progress_cb, read C.readf, seek C.seekf) *C.codegen_result_t {
+func ClientSendFile(nativeCtx unsafe.Pointer, clientPtr uintptr, fileName *C.char, cb C.notify_resultf, pcb C.update_progressf,
+	read C.readf, seek C.seekf) *C.codegen_result_t {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return codeGenResult(int(codes.ERR_NO_CLIENT), err.Error(), "")
 	}
 	ctx := context.Background()
 
-	reader := NewNativeReader(nativeContext, read, seek)
+	reader := NewNativeReader(nativeCtx, read, seek)
 
 	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
 	whenComplete := func() {
@@ -171,7 +171,7 @@ func ClientSendFile(nativeContext unsafe.Pointer, clientPtr uintptr, fileName *C
 
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(nativeContext, progress, pcb))
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(nativeCtx, progress, pcb))
 
 	if err != nil {
 		whenComplete()
@@ -192,14 +192,14 @@ func ClientSendFile(nativeContext unsafe.Pointer, clientPtr uintptr, fileName *C
 			resultC.err_code = C.int(codes.ERR_UNKNOWN)
 			resultC.err_string = C.CString("Unknown error")
 		}
-		C.call_callback(nativeContext, cb, resultC)
+		C.call_notify_result(nativeCtx, cb, resultC)
 	}()
 
 	return codeGenResult(int(codes.OK), "", code)
 }
 
 //export ClientRecvText
-func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.async_cb) int {
+func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.notify_resultf) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
@@ -213,7 +213,7 @@ func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 		if err != nil {
 			resultC.err_code = C.int(codes.ERR_RECV_TEXT)
 			resultC.err_string = C.CString(err.Error())
-			C.call_callback(ptrC, cb, resultC)
+			C.call_notify_result(ptrC, cb, resultC)
 			return
 		}
 
@@ -221,39 +221,39 @@ func ClientRecvText(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 		if err != nil {
 			resultC.err_code = C.int(codes.ERR_RECV_TEXT_DATA)
 			resultC.err_string = C.CString(err.Error())
-			C.call_callback(ptrC, cb, resultC)
+			C.call_notify_result(ptrC, cb, resultC)
 			return
 		}
 
 		resultC.received_text = C.CString(string(data))
 		resultC.err_code = C.int(codes.OK)
-		C.call_callback(ptrC, cb, resultC)
+		C.call_notify_result(ptrC, cb, resultC)
 	}()
 
 	return int(codes.OK)
 }
 
 //export ClientRecvFile
-func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char,
-	cb C.async_cb, pcb C.progress_cb, fmdcb C.file_metadata_cb, write C.writef) int {
+func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.notify_resultf, pcb C.update_progressf,
+	umdf C.update_metadataf, write C.writef) int {
 	client, err := getClient(clientPtr)
 	if err != nil {
 		return int(codes.ERR_NO_CLIENT)
 	}
 	ctx := context.Background()
 
-	resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
-	*resultC = C.result_t{}
-	progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
-	metadata := (*C.file_metadata_t)(C.malloc(C.sizeof_file_metadata_t))
-
 	go func() {
+		resultC := (*C.result_t)(C.malloc(C.sizeof_result_t))
+		*resultC = C.result_t{}
+		progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
+		metadata := (*C.file_metadata_t)(C.malloc(C.sizeof_file_metadata_t))
+
 		msg, err := client.Receive(ctx, C.GoString(codeC), false, progressHandler(ptrC, progress, pcb))
 
 		if err != nil {
 			resultC.err_code = C.int(codes.ERR_RECV_FILE)
 			resultC.err_string = C.CString(err.Error())
-			C.call_callback(ptrC, cb, resultC)
+			C.call_notify_result(ptrC, cb, resultC)
 			return
 		}
 
@@ -264,12 +264,9 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char,
 
 		pendingDownloads[int(metadata.download_id)] = make(chan int)
 
-		fmt.Printf("Calling update metadata")
-
-		C.update_metadata(ptrC, fmdcb, metadata)
+		C.call_update_metadata(ptrC, umdf, metadata)
 
 		download := func() {
-			fmt.Printf("Download function called")
 			c_buffer := C.malloc(MAX_READ_BUFFER_LEN)
 			defer C.free(c_buffer)
 			defer C.free(unsafe.Pointer(progress))
@@ -278,32 +275,35 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char,
 
 			var bytesRead int
 
-			// TODO maybe err == nil || bytesRead > 0 in case of EOF after reading some bytes?
 			for bytesRead, err = msg.Read(buffer); bytesRead > 0; bytesRead, err = msg.Read(buffer) {
 				for i := 0; i < bytesRead; i++ {
 					index := (*C.uint8_t)(unsafe.Pointer(uintptr(unsafe.Pointer(c_buffer)) + uintptr(i)))
 					*index = C.uint8_t(buffer[i])
 				}
 
-				C.call_write(ptrC, write, (*C.uint8_t)(c_buffer), C.int(bytesRead))
+				completed := int(C.call_write(ptrC, write, (*C.uint8_t)(c_buffer), C.int(bytesRead))) != 0
+				if !completed {
+					err = fmt.Errorf("Failed to write to file")
+					break
+				}
 			}
 
 			if err != nil && err != io.EOF {
 				resultC.err_code = C.int(codes.ERR_RECV_TEXT_DATA)
 				resultC.err_string = C.CString(err.Error())
-				C.call_callback(ptrC, cb, resultC)
+				C.call_notify_result(ptrC, cb, resultC)
 				return
 			}
 
 			resultC.err_code = C.int(codes.OK)
-			C.call_callback(ptrC, cb, resultC)
+			C.call_notify_result(ptrC, cb, resultC)
 		}
 
 		reject := func() {
 			msg.Reject()
 			resultC.err_code = C.int(codes.OK)
 			C.free(unsafe.Pointer(progress))
-			C.call_callback(ptrC, cb, resultC)
+			C.call_notify_result(ptrC, cb, resultC)
 		}
 
 		go func() {
@@ -324,7 +324,7 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char,
 				// TODO proper error code and string
 				resultC.err_code = C.int(1337)
 				resultC.err_string = C.CString("Invalid response. expecting either DOWNLOAD or REJECT")
-				C.call_callback(ptrC, cb, resultC)
+				C.call_notify_result(ptrC, cb, resultC)
 			}
 		}()
 
@@ -338,7 +338,6 @@ func getClient(clientPtr uintptr) (*wormhole.Client, error) {
 	client, ok := clientsMap[clientPtr]
 	if !ok {
 		fmt.Printf("clientMap entry missing: %d\n", uintptr(clientPtr))
-		fmt.Printf("clientMap entry missing: %d\n", clientPtr)
 		return nil, ErrClientNotFound
 	}
 
