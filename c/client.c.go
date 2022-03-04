@@ -171,7 +171,7 @@ func ClientSendFile(nativeCtx unsafe.Pointer, clientPtr uintptr, fileName *C.cha
 
 	// TODO: return code asynchronously (i.e. from a go routine).
 	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, false, progressHandler(nativeCtx, progress, pcb))
+	code, status, err := client.SendFile(ctx, C.GoString(fileName), reader, true, progressHandler(nativeCtx, progress, pcb))
 
 	if err != nil {
 		whenComplete()
@@ -248,7 +248,7 @@ func ClientRecvFile(ptrC unsafe.Pointer, clientPtr uintptr, codeC *C.char, cb C.
 		progress := (*C.progress_t)(C.malloc(C.sizeof_progress_t))
 		metadata := (*C.file_metadata_t)(C.malloc(C.sizeof_file_metadata_t))
 
-		msg, err := client.Receive(ctx, C.GoString(codeC), false, progressHandler(ptrC, progress, pcb))
+		msg, err := client.Receive(ctx, C.GoString(codeC), true, progressHandler(ptrC, progress, pcb))
 
 		if err != nil {
 			resultC.err_code = C.int(codes.ERR_RECV_FILE)
