@@ -2,6 +2,13 @@
 
 #ifndef CLIENT_INCLUDED
 #define CLIENT_INCLUDED
+
+#if defined(_WIN32) || defined(_WIN64)
+#define DLL_EXPORT __attribute__((dllexport))
+#else
+#define DLL_EXPORT
+#endif
+
 typedef struct {
   char *app_id;
   char *rendezvous_url;
@@ -51,6 +58,6 @@ int call_read(void *context, readf f, uint8_t *buffer, int length);
 int64_t call_seek(void *context, seekf f, int64_t offset, int whence);
 int call_write(void *context, writef f, uint8_t *buffer, int length);
 
-void free_result(result_t *result);
-void free_codegen_result(codegen_result_t *codegen_result);
+DLL_EXPORT void free_result(result_t *result);
+DLL_EXPORT void free_codegen_result(codegen_result_t *codegen_result);
 #endif
