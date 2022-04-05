@@ -2,29 +2,30 @@
 
 #include <stdlib.h>
 
-void call_notify_result(void *ptr, notify_resultf f, result_t *result) {
-  f(ptr, result);
+void call_notify_result(client_context_t ctx, notify_resultf f,
+                        result_t *result) {
+  f(ctx, result);
 }
 
-void call_update_progress(void *ptr, update_progressf pcb,
+void call_update_progress(client_context_t ctx, update_progressf pcb,
                           progress_t *progress) {
-  pcb(ptr, progress);
+  pcb(ctx, progress);
 }
 
-void call_update_metadata(void *context, update_metadataf mdf,
+void call_update_metadata(client_context_t ctx, update_metadataf mdf,
                           file_metadata_t *metadata) {
-  return mdf(context, metadata);
+  return mdf(ctx, metadata);
 }
 
-int call_read(void *ctx, readf f, uint8_t *buffer, int length) {
+int call_read(client_context_t ctx, readf f, uint8_t *buffer, int length) {
   return f(ctx, buffer, length);
 }
 
-int64_t call_seek(void *ctx, seekf f, int64_t offset, int whence) {
+int64_t call_seek(client_context_t ctx, seekf f, int64_t offset, int whence) {
   return f(ctx, offset, whence);
 }
 
-int call_write(void *ctx, writef f, uint8_t *buffer, int length) {
+int call_write(client_context_t ctx, writef f, uint8_t *buffer, int length) {
   return f(ctx, buffer, length);
 }
 
@@ -53,11 +54,10 @@ void free_result(result_t *result) {
 
 void free_codegen_result(codegen_result_t *result) {
   if (result != NULL) {
-    if (result->code != NULL) {
-      free(result->code);
-    }
-    if (result->error_string != NULL) {
-      free(result->error_string);
+    if (result->result_type == CodeGenSuccessful) {
+      free(result->generated.code);
+    } else {
+      free(result->error.error_string);
     }
     free(result);
   }

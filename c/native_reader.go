@@ -22,14 +22,14 @@ type ReadSeekCloser interface {
 }
 
 type native_reader struct {
-	ctx          unsafe.Pointer
+	ctx          C.client_context_t
 	buffer       *C.uint8_t
 	bufferLength int
 	read         C.readf
 	seek         C.seekf
 }
 
-func NewNativeReader(ctx unsafe.Pointer, read C.readf, seek C.seekf) ReadSeekCloser {
+func NewNativeReader(ctx C.client_context_t, read C.readf, seek C.seekf) ReadSeekCloser {
 	return native_reader{
 		ctx:          ctx,
 		buffer:       (*C.uint8_t)(C.malloc(MAX_READ_BUFFER_LEN)),
