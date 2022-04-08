@@ -1,3 +1,4 @@
+//go:build cgo
 // +build cgo
 
 package main
@@ -22,20 +23,16 @@ type ReadSeekCloser interface {
 }
 
 type native_reader struct {
-	ctx          C.client_context_t
+	context      Application
 	buffer       *C.uint8_t
 	bufferLength int
-	read         C.readf
-	seek         C.seekf
 }
 
-func NewNativeReader(ctx C.client_context_t, read C.readf, seek C.seekf) ReadSeekCloser {
+func NewNativeReader(ctx Application) ReadSeekCloser {
 	return native_reader{
-		ctx:          ctx,
+		context:      ctx,
 		buffer:       (*C.uint8_t)(C.malloc(MAX_READ_BUFFER_LEN)),
 		bufferLength: MAX_READ_BUFFER_LEN,
-		read:         read,
-		seek:         seek,
 	}
 }
 
@@ -49,7 +46,7 @@ func (r native_reader) Read(buffer []byte) (int, error) {
 	if len(buffer) < r.bufferLength {
 		l = len(buffer)
 	}
-	result := C.call_read(r.ctx, r.read, r.buffer, C.int(l))
+	result, _ := r.context.Read(r.buffer, l)
 
 	if result <= 0 {
 		return 0, io.EOF
@@ -64,7 +61,7 @@ func (r native_reader) Read(buffer []byte) (int, error) {
 }
 
 func (r native_reader) Seek(offset int64, whence int) (int64, error) {
-	result := C.call_seek(r.ctx, r.seek, C.int64_t(offset), C.int(whence))
+	result, _ := r.context.Seek(offset, whence)
 
 	if result < 0 {
 		return 0, fmt.Errorf("Invalid offset")

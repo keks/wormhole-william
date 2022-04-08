@@ -2,31 +2,32 @@
 
 #include <stdlib.h>
 
-void call_notify_result(client_context_t ctx, notify_resultf f,
-                        result_t *result) {
-  f(ctx, result);
+void call_update_progress(wrapped_context_t *context) {
+  context->impl.update_progress(context->clientCtx, &context->progress);
 }
 
-void call_update_progress(client_context_t ctx, update_progressf pcb,
-                          progress_t *progress) {
-  pcb(ctx, progress);
+void call_notify(wrapped_context_t *context) {
+  context->impl.notify(context->clientCtx, &context->result);
 }
 
-void call_update_metadata(client_context_t ctx, update_metadataf mdf,
-                          file_metadata_t *metadata) {
-  return mdf(ctx, metadata);
+void call_log(wrapped_context_t *context, char *msg) {
+  context->impl.log(context->clientCtx, msg);
 }
 
-int call_read(client_context_t ctx, readf f, uint8_t *buffer, int length) {
-  return f(ctx, buffer, length);
+void call_update_metadata(wrapped_context_t *context) {
+  context->impl.update_metadata(context->clientCtx, &context->metadata);
 }
 
-int64_t call_seek(client_context_t ctx, seekf f, int64_t offset, int whence) {
-  return f(ctx, offset, whence);
+bool call_write(wrapped_context_t *context, uint8_t *buffer, int length) {
+  return context->impl.write(context->clientCtx, buffer, length);
 }
 
-int call_write(client_context_t ctx, writef f, uint8_t *buffer, int length) {
-  return f(ctx, buffer, length);
+int call_read(wrapped_context_t *context, uint8_t *buffer, int length) {
+  return context->impl.read(context->clientCtx, buffer, length);
+}
+
+int64_t call_seek(wrapped_context_t *context, int64_t offset, int whence) {
+  return context->impl.seek(context->clientCtx, offset, whence);
 }
 
 void free_file_metadata(file_metadata_t *fmd) {
@@ -60,5 +61,29 @@ void free_codegen_result(codegen_result_t *result) {
       free(result->error.error_string);
     }
     free(result);
+  }
+}
+
+void free_wrapped_context(wrapped_context_t *wctx) {
+  if (wctx != NULL) {
+    if (wctx->codegen_result.result_type == CodeGenSuccessful &&
+        wctx->codegen_result.generated.code != NULL) {
+      free(wctx->codegen_result.generated.code);
+    } else if (wctx->codegen_result.error.error_string != NULL) {
+      free(wctx->codegen_result.error.error_string);
+    }
+
+    if (wctx->result.result_type == Success &&
+        wctx->result.received_text != NULL) {
+      free(wctx->result.received_text);
+    } else if (wctx->result.err_string != NULL) {
+      free(wctx->result.err_string);
+    }
+
+    if (wctx->clientCtx != NULL && wctx->impl.free_client_ctx != NULL) {
+      wctx->impl.free_client_ctx(wctx->clientCtx);
+    }
+
+    free(wctx);
   }
 }

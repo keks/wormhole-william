@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifndef CLIENT_INCLUDED
@@ -64,28 +65,50 @@ typedef struct {
   int64_t total_bytes;
 } progress_t;
 
-typedef void (*notify_resultf)(client_context_t context, result_t *result);
-typedef void (*update_progressf)(client_context_t context,
-                                 progress_t *progress);
-typedef void (*update_metadataf)(client_context_t context,
-                                 file_metadata_t *metadata);
+typedef void (*notifyf)(void *context, result_t *result);
+typedef void (*update_progressf)(void *context, progress_t *progress);
 
-typedef int (*readf)(client_context_t context, uint8_t *buffer, int length);
-typedef int64_t (*seekf)(client_context_t context, int64_t offset, int whence);
-typedef int (*writef)(client_context_t context, uint8_t *buffer, int length);
+typedef void (*update_metadataf)(void *context, file_metadata_t *metadata);
 
-void call_notify_result(client_context_t context, notify_resultf f,
-                        result_t *result);
-void call_update_progress(client_context_t context, update_progressf cb,
-                          progress_t *progress);
-void call_update_metadata(client_context_t context, update_metadataf cb,
-                          file_metadata_t *metadata);
+typedef int (*readf)(void *context, uint8_t *buffer, int length);
+typedef int64_t (*seekf)(void *context, int64_t offset, int whence);
+typedef int (*writef)(void *context, uint8_t *buffer, int length);
 
-int call_read(client_context_t context, readf f, uint8_t *buffer, int length);
-int64_t call_seek(client_context_t context, seekf f, int64_t offset,
-                  int whence);
-int call_write(client_context_t context, writef f, uint8_t *buffer, int length);
+typedef void (*logf)(void *context, char *message);
 
-DLL_EXPORT void free_result(result_t *result);
+typedef struct {
+  readf read;
+  seekf seek;
+  update_progressf update_progress;
+  notifyf notify;
+  update_metadataf update_metadata;
+  writef write;
+  void (*free_client_ctx)(client_context_t t);
+  logf log;
+} client_impl_t;
+
+typedef struct _wrapped_context_t {
+  client_context_t clientCtx;
+  client_impl_t impl;
+
+  int32_t go_client_id;
+
+  progress_t progress;
+  result_t result;
+  codegen_result_t codegen_result;
+  file_metadata_t metadata;
+} wrapped_context_t;
+
+void call_notify(wrapped_context_t *context);
+void call_update_progress(wrapped_context_t *context);
+void call_update_metadata(wrapped_context_t *context);
+
+int call_read(wrapped_context_t *context, uint8_t *buffer, int32_t length);
+int64_t call_seek(wrapped_context_t *context, int64_t offset, int32_t whence);
+bool call_write(wrapped_context_t *context, uint8_t *buffer, int32_t length);
+
+void call_log(wrapped_context_t *context, char *msg);
+
+DLL_EXPORT void free_wrapped_context(wrapped_context_t *wctx);
 DLL_EXPORT void free_codegen_result(codegen_result_t *codegen_result);
 #endif
