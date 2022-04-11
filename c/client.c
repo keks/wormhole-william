@@ -10,6 +10,10 @@ void call_notify(wrapped_context_t *context) {
   context->impl.notify(context->clientCtx, &context->result);
 }
 
+void call_notify_codegen(wrapped_context_t *context) {
+  context->impl.notify_codegen(context->clientCtx, &context->codegen_result);
+}
+
 void call_log(wrapped_context_t *context, char *msg) {
   context->impl.log(context->clientCtx, msg);
 }
@@ -18,15 +22,17 @@ void call_update_metadata(wrapped_context_t *context) {
   context->impl.update_metadata(context->clientCtx, &context->metadata);
 }
 
-bool call_write(wrapped_context_t *context, uint8_t *buffer, int length) {
+char *call_write(wrapped_context_t *context, uint8_t *buffer, int length) {
   return context->impl.write(context->clientCtx, buffer, length);
 }
 
-int call_read(wrapped_context_t *context, uint8_t *buffer, int length) {
+read_result_t call_read(wrapped_context_t *context, uint8_t *buffer,
+                        int length) {
   return context->impl.read(context->clientCtx, buffer, length);
 }
 
-int64_t call_seek(wrapped_context_t *context, int64_t offset, int whence) {
+seek_result_t call_seek(wrapped_context_t *context, int64_t offset,
+                        int32_t whence) {
   return context->impl.seek(context->clientCtx, offset, whence);
 }
 

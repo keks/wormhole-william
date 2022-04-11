@@ -65,14 +65,25 @@ typedef struct {
   int64_t total_bytes;
 } progress_t;
 
+typedef struct {
+  int64_t bytes_read;
+  const char *error_msg;
+} read_result_t;
+
+typedef struct {
+  int64_t current_offset;
+  const char *error_msg;
+} seek_result_t;
+
 typedef void (*notifyf)(void *context, result_t *result);
+typedef void (*notifycodegenf)(void *context, codegen_result_t *result);
 typedef void (*update_progressf)(void *context, progress_t *progress);
 
 typedef void (*update_metadataf)(void *context, file_metadata_t *metadata);
 
-typedef int (*readf)(void *context, uint8_t *buffer, int length);
-typedef int64_t (*seekf)(void *context, int64_t offset, int whence);
-typedef int (*writef)(void *context, uint8_t *buffer, int length);
+typedef read_result_t (*readf)(void *context, uint8_t *buffer, int length);
+typedef seek_result_t (*seekf)(void *context, int64_t offset, int32_t whence);
+typedef char *(*writef)(void *context, uint8_t *buffer, int length);
 
 typedef void (*logf)(void *context, char *message);
 
@@ -81,6 +92,7 @@ typedef struct {
   seekf seek;
   update_progressf update_progress;
   notifyf notify;
+  notifycodegenf notify_codegen;
   update_metadataf update_metadata;
   writef write;
   void (*free_client_ctx)(client_context_t t);
@@ -100,12 +112,15 @@ typedef struct _wrapped_context_t {
 } wrapped_context_t;
 
 void call_notify(wrapped_context_t *context);
+void call_notify_codegen(wrapped_context_t *context);
 void call_update_progress(wrapped_context_t *context);
 void call_update_metadata(wrapped_context_t *context);
 
-int call_read(wrapped_context_t *context, uint8_t *buffer, int32_t length);
-int64_t call_seek(wrapped_context_t *context, int64_t offset, int32_t whence);
-bool call_write(wrapped_context_t *context, uint8_t *buffer, int32_t length);
+read_result_t call_read(wrapped_context_t *context, uint8_t *buffer,
+                        int32_t length);
+seek_result_t call_seek(wrapped_context_t *context, int64_t offset,
+                        int32_t whence);
+char *call_write(wrapped_context_t *context, uint8_t *buffer, int32_t length);
 
 void call_log(wrapped_context_t *context, char *msg);
 

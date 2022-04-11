@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
 	"unsafe"
 
 	"github.com/psanford/wormhole-william/c/codes"
@@ -53,15 +54,28 @@ var (
 
 	clientsMap       map[int32]clientWithContext = map[int32]clientWithContext{}
 	pendingTransfers map[int]transferContext     = map[int]transferContext{}
+	transfersLock    sync.Mutex
 )
 
-func progressHandler(context Application) wormhole.TransferOption {
-	return wormhole.WithProgress(context.UpdateProgress)
-}
-
 func removePendingTransfer(transferId int) {
+	transfersLock.Lock()
+	defer transfersLock.Unlock()
+
 	close(pendingTransfers[transferId].Commands)
 	delete(pendingTransfers, transferId)
+}
+
+func addPendingTransfer(cancelFunc context.CancelFunc) int {
+	transfersLock.Lock()
+	defer transfersLock.Unlock()
+
+	transferId := len(pendingTransfers)
+	pendingTransfers[transferId] = transferContext{
+		Commands:   make(chan Command),
+		CancelFunc: cancelFunc,
+	}
+
+	return transferId
 }
 
 //export NewClient
@@ -101,6 +115,8 @@ func NewClient(appId *C.char, rendezvousUrl *C.char, transitRelayUrl *C.char, pa
 //export Finalize
 func Finalize(clientId int32) int32 {
 	client, ok := clientsMap[clientId]
+
+	client.appContext.Log("Finalizing client with id %d", clientId)
 
 	if !ok {
 		return int32(codes.ERR_NO_CLIENT)
@@ -158,31 +174,25 @@ func ClientSendText(clientCtx *C.wrapped_context_t, msgC *C.char) *C.codegen_res
 	return codeGenSuccessful(clientCtx, len(pendingTransfers), code)
 }
 
-//export ClientSendFile
-func ClientSendFile(clientCtx *C.wrapped_context_t, fileName *C.char) *C.codegen_result_t {
-	client, err := getClientWithContext(clientCtx)
+func sendFile(app Application, fileName string) {
+	client, err := getClientWithContext(app)
 	if err != nil {
-		return codeGenFailed(clientCtx, C.FailedToGetClient, err.Error())
+		app.NotifyCodeGenerationFailure(C.FailedToGetClient, err.Error())
+		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	reader := NewNativeReader(clientCtx)
+	reader := NewNativeReader(app)
 
-	transferCtx := transferContext{
-		Commands:   make(chan Command),
-		CancelFunc: cancel,
-	}
+	transferId := addPendingTransfer(cancel)
 
-	transferId := len(pendingTransfers)
-	pendingTransfers[transferId] = transferCtx
-
-	// TODO: return code asynchronously (i.e. from a go routine).
-	//	This call blocks on network I/O with the mailbox.
-	code, status, err := client.client.SendFile(ctx, C.GoString(fileName), reader, true, progressHandler(clientCtx))
+	code, status, err := client.client.SendFile(ctx, fileName, reader, true, wormhole.WithProgress(app.UpdateProgress))
 
 	if err != nil {
-		return codeGenFailed(clientCtx, C.CodeGenerationFailed, fmt.Sprintf("Failed to generate code for client.SendFile: %v", err))
+		app.NotifyCodeGenerationFailure(C.CodeGenerationFailed, err.Error())
 	}
+
+	app.NotifyCodeGenerated(transferId, code)
 
 	go func() {
 		for msg := range pendingTransfers[transferId].Commands {
@@ -201,17 +211,21 @@ func ClientSendFile(clientCtx *C.wrapped_context_t, fileName *C.char) *C.codegen
 	}()
 
 	go func() {
+		defer removePendingTransfer(transferId)
 		s := <-status
 		if s.Error != nil {
-			clientCtx.NotifyError(C.SendFileError, s.Error.Error())
+			app.NotifyError(C.SendFileError, s.Error.Error())
 		} else if s.OK {
-			clientCtx.NotifySuccess()
+			app.NotifySuccess()
 		} else {
-			clientCtx.NotifyError(C.SendFileError, "Unknown error")
+			app.NotifyError(C.SendFileError, "Unknown error")
 		}
 	}()
+}
 
-	return codeGenSuccessful(clientCtx, transferId, code)
+//export ClientSendFile
+func ClientSendFile(clientCtx *C.wrapped_context_t, fileName *C.char) {
+	go sendFile(clientCtx, C.GoString(fileName))
 }
 
 //export ClientRecvText
@@ -241,83 +255,77 @@ func ClientRecvText(clientCtx *C.wrapped_context_t, codeC *C.char) int {
 	return int(codes.OK)
 }
 
-//export ClientRecvFile
-func ClientRecvFile(clientCtx *C.wrapped_context_t, codeC *C.char) int {
-	client, err := getClientWithContext(clientCtx)
+func recvFile(app Application, code string) {
+	client, err := getClientWithContext(app)
 	if err != nil {
-		return int(codes.ERR_NO_CLIENT)
+		app.NotifyError(C.ReceiveFileError, err.Error())
+		return
 	}
-	clientCtx.Log("Got client with id: %d", client.appContext.ClientId())
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	go func() {
-		msg, err := client.client.Receive(ctx, C.GoString(codeC), true, progressHandler(clientCtx))
+	msg, err := client.client.Receive(ctx, code, true, wormhole.WithProgress(app.UpdateProgress))
 
-		if err != nil {
-			clientCtx.NotifyError(C.ReceiveFileError, err.Error())
+	if err != nil {
+		app.NotifyError(C.ReceiveFileError, err.Error())
+		return
+	}
+
+	downloadId := addPendingTransfer(cancelFunc)
+
+	app.UpdateMetadata(msg.Name, msg.UncompressedBytes64, downloadId)
+
+	download := func() {
+		c_buffer := C.malloc(MAX_READ_BUFFER_LEN)
+		defer C.free(c_buffer)
+
+		buffer := make([]byte, MAX_READ_BUFFER_LEN)
+
+		var bytesRead int
+
+		for bytesRead, err = msg.Read(buffer); bytesRead > 0 && err == nil; bytesRead, err = msg.Read(buffer) {
+			for i := 0; i < bytesRead; i++ {
+				index := (*C.uint8_t)(unsafe.Pointer(uintptr(unsafe.Pointer(c_buffer)) + uintptr(i)))
+				*index = C.uint8_t(buffer[i])
+			}
+
+			if err = app.Write(c_buffer, bytesRead); err != nil {
+				break
+			}
+		}
+
+		if err != nil && err != io.EOF {
+			app.NotifyError(C.ReceiveFileError, err.Error())
 			return
 		}
 
-		downloadId := len(pendingTransfers)
+		app.NotifySuccess()
+		removePendingTransfer(downloadId)
+	}
 
-		pendingTransfers[downloadId] = transferContext{
-			Commands:   make(chan Command),
-			CancelFunc: cancelFunc,
-		}
+	reject := func() {
+		msg.Reject()
+		app.NotifyError(C.TransferRejected, "Transfer rejected")
+		removePendingTransfer(downloadId)
+	}
 
-		clientCtx.UpdateMetadata(msg.Name, msg.UncompressedBytes64, downloadId)
-
-		download := func() {
-			c_buffer := C.malloc(MAX_READ_BUFFER_LEN)
-			defer C.free(c_buffer)
-
-			buffer := make([]byte, MAX_READ_BUFFER_LEN)
-
-			var bytesRead int
-
-			for bytesRead, err = msg.Read(buffer); bytesRead > 0 && err == nil; bytesRead, err = msg.Read(buffer) {
-				for i := 0; i < bytesRead; i++ {
-					index := (*C.uint8_t)(unsafe.Pointer(uintptr(unsafe.Pointer(c_buffer)) + uintptr(i)))
-					*index = C.uint8_t(buffer[i])
-				}
-
-				if err = clientCtx.Write(c_buffer, bytesRead); err != nil {
-					break
-				}
+	go func() {
+		for response := range pendingTransfers[downloadId].Commands {
+			switch response {
+			case DOWNLOAD:
+				go download()
+			case REJECT:
+				reject()
+			case CANCEL:
+				pendingTransfers[downloadId].CancelFunc()
+				removePendingTransfer(downloadId)
 			}
-
-			if err != nil && err != io.EOF {
-				clientCtx.NotifyError(C.ReceiveFileError, err.Error())
-				return
-			}
-
-			clientCtx.NotifySuccess()
-			removePendingTransfer(downloadId)
 		}
-
-		reject := func() {
-			msg.Reject()
-			clientCtx.NotifyError(C.TransferRejected, "Transfer rejected")
-			removePendingTransfer(downloadId)
-		}
-
-		go func() {
-			for response := range pendingTransfers[downloadId].Commands {
-				switch response {
-				case DOWNLOAD:
-					go download()
-				case REJECT:
-					reject()
-				case CANCEL:
-					pendingTransfers[downloadId].CancelFunc()
-					removePendingTransfer(downloadId)
-				}
-			}
-		}()
-
 	}()
+}
 
-	return int(codes.OK)
+//export ClientRecvFile
+func ClientRecvFile(clientCtx *C.wrapped_context_t, codeC *C.char) {
+	go recvFile(clientCtx, C.GoString(codeC))
 }
 
 // TODO: refactor w/ wasm package?

@@ -33,6 +33,8 @@ type Application interface {
 	ClientId() int32
 	InternalContext() C.client_context_t
 	Finalize()
+	NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string)
+	NotifyCodeGenerated(transferId int, code string)
 }
 
 // TODO when the original error type contains more information than
@@ -85,9 +87,11 @@ func (wctx *C.wrapped_context_t) UpdateMetadata(fileName string, length int64, d
 }
 
 func (wctx *C.wrapped_context_t) Write(bytes unsafe.Pointer, length int) error {
-	successful := C.call_write(wctx, (*C.uint8_t)(bytes), C.int32_t(length))
-	if !successful {
-		return fmt.Errorf("Failed to write to file")
+	errorMsg := C.call_write(wctx, (*C.uint8_t)(bytes), C.int32_t(length))
+
+	if unsafe.Pointer(errorMsg) != nil {
+		defer C.free(unsafe.Pointer(errorMsg))
+		return fmt.Errorf("Failed to write to file: %s", C.GoString(errorMsg))
 	}
 
 	return nil
@@ -109,15 +113,48 @@ func (wctx *C.wrapped_context_t) TextReceived(text string) {
 }
 
 func (wctx *C.wrapped_context_t) Read(buffer *C.uint8_t, length int) (int, error) {
-	return int(C.call_read(wctx, buffer, C.int(length))), nil
+	result := C.call_read(wctx, buffer, C.int(length))
+	if result.error_msg != nil {
+		defer C.free(unsafe.Pointer(result.error_msg))
+		return -1, fmt.Errorf(C.GoString(result.error_msg))
+	} else {
+		return int(result.bytes_read), nil
+	}
 }
 
 func (wctx *C.wrapped_context_t) Seek(offset int64, whence int) (int64, error) {
-	return int64(C.call_seek(wctx, C.int64_t(offset), C.int(whence))), nil
+	result := C.call_seek(wctx, C.int64_t(offset), C.int32_t(whence))
+
+	if result.error_msg != nil {
+		defer C.free(unsafe.Pointer(result.error_msg))
+		return -1, fmt.Errorf(C.GoString(result.error_msg))
+	} else {
+		return int64(result.current_offset), nil
+	}
 }
 
 func (wctx *C.wrapped_context_t) ClientId() int32 {
 	return int32(wctx.go_client_id)
+}
+
+func (wctx *C.wrapped_context_t) NotifyCodeGenerated(transferId int, code string) {
+	wctx.codegen_result = C.codegen_result_t{
+		result_type: C.CodeGenSuccessful,
+		context:     wctx.InternalContext(),
+	}
+
+	wctx.codegen_result.generated.code = C.CString(code)
+	wctx.codegen_result.generated.transfer_id = C.int32_t(transferId)
+	C.call_notify_codegen(wctx)
+}
+
+func (wctx *C.wrapped_context_t) NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string) {
+	wctx.codegen_result = C.codegen_result_t{
+		result_type: errorCode,
+		context:     wctx.InternalContext(),
+	}
+	wctx.codegen_result.error.error_string = C.CString(errorMessage)
+	C.call_notify_codegen(wctx)
 }
 
 func (wctx *C.wrapped_context_t) Finalize() {

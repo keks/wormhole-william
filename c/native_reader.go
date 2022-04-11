@@ -4,7 +4,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"unsafe"
 )
@@ -46,9 +45,11 @@ func (r native_reader) Read(buffer []byte) (int, error) {
 	if len(buffer) < r.bufferLength {
 		l = len(buffer)
 	}
-	result, _ := r.context.Read(r.buffer, l)
+	result, err := r.context.Read(r.buffer, l)
 
-	if result <= 0 {
+	if err != nil {
+		return 0, err
+	} else if result <= 0 {
 		return 0, io.EOF
 	} else {
 		// TODO probably something like memcpy can be done here with unsafe.Slice?
@@ -61,10 +62,10 @@ func (r native_reader) Read(buffer []byte) (int, error) {
 }
 
 func (r native_reader) Seek(offset int64, whence int) (int64, error) {
-	result, _ := r.context.Seek(offset, whence)
+	result, err := r.context.Seek(offset, whence)
 
-	if result < 0 {
-		return 0, fmt.Errorf("Invalid offset")
+	if err != nil {
+		return -1, err
 	}
-	return int64(result), nil
+	return result, nil
 }
