@@ -17,13 +17,12 @@ typedef struct {
   char *rendezvous_url;
   char *transit_relay_url;
   int32_t passphrase_length;
-} client_config;
+} client_config_t;
 
 typedef struct {
   int64_t length;
   char *file_name;
-  int32_t download_id;
-  client_context_t context;
+  struct _wrapped_context_t *context;
 } file_metadata_t;
 
 typedef enum {
@@ -37,6 +36,7 @@ typedef enum {
 } result_type_t;
 
 typedef struct {
+  struct _wrapped_context_t *context;
   result_type_t result_type;
   char *err_string;
   char *received_text;
@@ -101,9 +101,9 @@ typedef struct {
 
 typedef struct _wrapped_context_t {
   client_context_t clientCtx;
-  client_impl_t impl;
 
-  int32_t go_client_id;
+  client_impl_t impl;
+  client_config_t config;
 
   progress_t progress;
   result_t result;

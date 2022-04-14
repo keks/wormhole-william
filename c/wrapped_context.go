@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"unsafe"
+
+	"github.com/psanford/wormhole-william/wormhole"
 )
 
 // #include <stdlib.h>
@@ -20,21 +22,29 @@ const (
 	ERR_TRANSFER_REJECTED = "transfer rejected"
 )
 
-type Application interface {
+const (
+	DEFAULT_APP_ID                      = "lothar.com/wormhole/text-or-file-xfer"
+	DEFAULT_RENDEZVOUS_URL              = "ws://relay.magic-wormhole.io:4000/v1"
+	DEFAULT_TRANSIT_RELAY_URL           = "tcp:transit.magic-wormhole.io:4001"
+	DEFAULT_PASSPHRASE_COMPONENT_LENGTH = 2
+)
+
+type PendingTransfer interface {
 	Log(message string, args ...interface{})
 	UpdateProgress(done int64, total int64)
 	NotifyError(result C.result_type_t, errorMessage string)
-	UpdateMetadata(fileName string, length int64, downloadId int)
+	UpdateMetadata(fileName string, length int64)
 	Write(bytes unsafe.Pointer, length int) error
 	Read(buffer *C.uint8_t, length int) (int, error)
 	Seek(offset int64, whence int) (int64, error)
 	NotifySuccess()
 	TextReceived(text string)
-	ClientId() int32
 	InternalContext() C.client_context_t
 	Finalize()
 	NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string)
-	NotifyCodeGenerated(transferId int, code string)
+	NotifyCodeGenerated(code string)
+	NewClient() *wormhole.Client
+	Reference() unsafe.Pointer
 }
 
 // TODO when the original error type contains more information than
@@ -78,11 +88,11 @@ func (wctx *C.wrapped_context_t) NotifyError(result C.result_type_t, errorMessag
 	C.call_notify(wctx)
 }
 
-func (wctx *C.wrapped_context_t) UpdateMetadata(fileName string, length int64, downloadId int) {
+func (wctx *C.wrapped_context_t) UpdateMetadata(fileName string, length int64) {
+	wctx.Log("Updating metadata. Filename:%s, length:%d", fileName, length)
 	wctx.metadata.length = C.int64_t(length)
 	wctx.metadata.file_name = C.CString(fileName)
-	wctx.metadata.context = wctx.clientCtx
-	wctx.metadata.download_id = C.int32_t(downloadId)
+	wctx.metadata.context = wctx
 	C.call_update_metadata(wctx)
 }
 
@@ -98,17 +108,13 @@ func (wctx *C.wrapped_context_t) Write(bytes unsafe.Pointer, length int) error {
 }
 
 func (wctx *C.wrapped_context_t) NotifySuccess() {
-	wctx.result = C.result_t{
-		result_type: C.Success,
-	}
+	wctx.result.result_type = C.Success
 	C.call_notify(wctx)
 }
 
 func (wctx *C.wrapped_context_t) TextReceived(text string) {
-	wctx.result = C.result_t{
-		result_type:   C.Success,
-		received_text: C.CString(text),
-	}
+	wctx.result.result_type = C.Success
+	wctx.result.received_text = C.CString(text)
 	C.call_notify(wctx)
 }
 
@@ -133,22 +139,19 @@ func (wctx *C.wrapped_context_t) Seek(offset int64, whence int) (int64, error) {
 	}
 }
 
-func (wctx *C.wrapped_context_t) ClientId() int32 {
-	return int32(wctx.go_client_id)
-}
-
-func (wctx *C.wrapped_context_t) NotifyCodeGenerated(transferId int, code string) {
+func (wctx *C.wrapped_context_t) NotifyCodeGenerated(code string) {
+	wctx.Log("Code generated: %s", code)
 	wctx.codegen_result = C.codegen_result_t{
 		result_type: C.CodeGenSuccessful,
 		context:     wctx.InternalContext(),
 	}
 
 	wctx.codegen_result.generated.code = C.CString(code)
-	wctx.codegen_result.generated.transfer_id = C.int32_t(transferId)
 	C.call_notify_codegen(wctx)
 }
 
 func (wctx *C.wrapped_context_t) NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string) {
+	wctx.Log("Code generation failed. error code:%d, error message:%s", errorCode, errorMessage)
 	wctx.codegen_result = C.codegen_result_t{
 		result_type: errorCode,
 		context:     wctx.InternalContext(),
@@ -164,4 +167,34 @@ func (wctx *C.wrapped_context_t) Finalize() {
 
 func (wctx *C.wrapped_context_t) InternalContext() C.client_context_t {
 	return wctx.clientCtx
+}
+
+func (wctx *C.wrapped_context_t) NewClient() *wormhole.Client {
+	client := &wormhole.Client{
+		AppID:                     DEFAULT_APP_ID,
+		RendezvousURL:             DEFAULT_RENDEZVOUS_URL,
+		TransitRelayURL:           DEFAULT_TRANSIT_RELAY_URL,
+		PassPhraseComponentLength: DEFAULT_PASSPHRASE_COMPONENT_LENGTH,
+	}
+
+	if wctx.config.app_id != nil {
+		client.AppID = C.GoString(wctx.config.app_id)
+	}
+
+	if wctx.config.rendezvous_url != nil {
+		client.RendezvousURL = C.GoString(wctx.config.rendezvous_url)
+	}
+
+	if wctx.config.transit_relay_url != nil {
+		client.TransitRelayURL = C.GoString(wctx.config.transit_relay_url)
+	}
+
+	if wctx.config.passphrase_length == 0 {
+		client.PassPhraseComponentLength = int(wctx.config.passphrase_length)
+	}
+	return client
+}
+
+func (wctx *C.wrapped_context_t) Reference() unsafe.Pointer {
+	return unsafe.Pointer(wctx)
 }

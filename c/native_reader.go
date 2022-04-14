@@ -22,12 +22,12 @@ type ReadSeekCloser interface {
 }
 
 type native_reader struct {
-	context      Application
+	context      PendingTransfer
 	buffer       *C.uint8_t
 	bufferLength int
 }
 
-func NewNativeReader(ctx Application) ReadSeekCloser {
+func NewNativeReader(ctx PendingTransfer) ReadSeekCloser {
 	return native_reader{
 		context:      ctx,
 		buffer:       (*C.uint8_t)(C.malloc(MAX_READ_BUFFER_LEN)),

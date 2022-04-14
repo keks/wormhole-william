@@ -90,6 +90,18 @@ void free_wrapped_context(wrapped_context_t *wctx) {
       wctx->impl.free_client_ctx(wctx->clientCtx);
     }
 
+    if (wctx->config.app_id != NULL) {
+      free(wctx->config.app_id);
+    }
+
+    if (wctx->config.rendezvous_url != NULL) {
+      free(wctx->config.rendezvous_url);
+    }
+
+    if (wctx->config.transit_relay_url != NULL) {
+      free(wctx->config.transit_relay_url);
+    }
+
     free(wctx);
   }
 }
