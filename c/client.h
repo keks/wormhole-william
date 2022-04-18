@@ -22,7 +22,6 @@ typedef struct {
 typedef struct {
   int64_t length;
   char *file_name;
-  struct _wrapped_context_t *context;
 } file_metadata_t;
 
 typedef enum {
@@ -36,7 +35,6 @@ typedef enum {
 } result_type_t;
 
 typedef struct {
-  struct _wrapped_context_t *context;
   result_type_t result_type;
   char *err_string;
   char *received_text;
@@ -50,7 +48,6 @@ typedef enum {
 
 typedef struct {
   codegen_result_type_t result_type;
-  client_context_t context;
   struct {
     char *error_string;
   } error;

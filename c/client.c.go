@@ -39,11 +39,7 @@ type clientWithContext struct {
 	client     *wormhole.Client
 }
 
-var (
-	ErrClientNotFound = fmt.Errorf("%s", "wormhole client not found")
-
-	pendingTransfers map[unsafe.Pointer]transferContext = map[unsafe.Pointer]transferContext{}
-)
+var pendingTransfers map[unsafe.Pointer]transferContext = map[unsafe.Pointer]transferContext{}
 
 func addPendingTransfer(transferRef unsafe.Pointer, cancelFunc context.CancelFunc) {
 	pendingTransfers[transferRef] = transferContext{

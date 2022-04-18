@@ -39,7 +39,6 @@ type PendingTransfer interface {
 	Seek(offset int64, whence int) (int64, error)
 	NotifySuccess()
 	TextReceived(text string)
-	InternalContext() C.client_context_t
 	Finalize()
 	NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string)
 	NotifyCodeGenerated(code string)
@@ -92,7 +91,6 @@ func (wctx *C.wrapped_context_t) UpdateMetadata(fileName string, length int64) {
 	wctx.Log("Updating metadata. Filename:%s, length:%d", fileName, length)
 	wctx.metadata.length = C.int64_t(length)
 	wctx.metadata.file_name = C.CString(fileName)
-	wctx.metadata.context = wctx
 	C.call_update_metadata(wctx)
 }
 
@@ -141,21 +139,14 @@ func (wctx *C.wrapped_context_t) Seek(offset int64, whence int) (int64, error) {
 
 func (wctx *C.wrapped_context_t) NotifyCodeGenerated(code string) {
 	wctx.Log("Code generated: %s", code)
-	wctx.codegen_result = C.codegen_result_t{
-		result_type: C.CodeGenSuccessful,
-		context:     wctx.InternalContext(),
-	}
-
+	wctx.codegen_result.result_type = C.CodeGenSuccessful
 	wctx.codegen_result.generated.code = C.CString(code)
 	C.call_notify_codegen(wctx)
 }
 
 func (wctx *C.wrapped_context_t) NotifyCodeGenerationFailure(errorCode C.codegen_result_type_t, errorMessage string) {
 	wctx.Log("Code generation failed. error code:%d, error message:%s", errorCode, errorMessage)
-	wctx.codegen_result = C.codegen_result_t{
-		result_type: errorCode,
-		context:     wctx.InternalContext(),
-	}
+	wctx.codegen_result.result_type = errorCode
 	wctx.codegen_result.error.error_string = C.CString(errorMessage)
 	C.call_notify_codegen(wctx)
 }
@@ -163,10 +154,6 @@ func (wctx *C.wrapped_context_t) NotifyCodeGenerationFailure(errorCode C.codegen
 func (wctx *C.wrapped_context_t) Finalize() {
 	wctx.Log("Finalizing context at %d", int(uintptr(unsafe.Pointer(wctx))))
 	C.free_wrapped_context(wctx)
-}
-
-func (wctx *C.wrapped_context_t) InternalContext() C.client_context_t {
-	return wctx.clientCtx
 }
 
 func (wctx *C.wrapped_context_t) NewClient() *wormhole.Client {
