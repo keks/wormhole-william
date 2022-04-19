@@ -85,8 +85,9 @@ func sendText(transfer PendingTransfer, msg string) {
 }
 
 //export ClientSendText
-func ClientSendText(transfer *C.wrapped_context_t, msg *C.char) {
-	go sendText(transfer, C.GoString(msg))
+func ClientSendText(transfer *C.wrapped_context_t, msgC *C.char) {
+	msg := C.GoString(msgC)
+	go sendText(transfer, msg)
 }
 
 func sendFile(transfer PendingTransfer, fileName string) {
@@ -100,6 +101,7 @@ func sendFile(transfer PendingTransfer, fileName string) {
 
 	if err != nil {
 		transfer.NotifyCodeGenerationFailure(C.CodeGenerationFailed, err.Error())
+		return
 	}
 
 	transfer.NotifyCodeGenerated(code)
@@ -133,8 +135,9 @@ func sendFile(transfer PendingTransfer, fileName string) {
 }
 
 //export ClientSendFile
-func ClientSendFile(transfer *C.wrapped_context_t, fileName *C.char) {
-	go sendFile(transfer, C.GoString(fileName))
+func ClientSendFile(transfer *C.wrapped_context_t, fileNameC *C.char) {
+	fileName := C.GoString(fileNameC)
+	go sendFile(transfer, fileName)
 }
 
 func receiveText(transfer PendingTransfer, code string) {
@@ -156,8 +159,9 @@ func receiveText(transfer PendingTransfer, code string) {
 }
 
 //export ClientRecvText
-func ClientRecvText(transfer *C.wrapped_context_t, code *C.char) {
-	go receiveText(transfer, C.GoString(code))
+func ClientRecvText(transfer *C.wrapped_context_t, codeC *C.char) {
+	code := C.GoString(codeC)
+	go receiveText(transfer, code)
 }
 
 func recvFile(transfer PendingTransfer, code string) {
@@ -221,8 +225,9 @@ func recvFile(transfer PendingTransfer, code string) {
 }
 
 //export ClientRecvFile
-func ClientRecvFile(pendingTransfer *C.wrapped_context_t, code *C.char) {
-	go recvFile(pendingTransfer, C.GoString(code))
+func ClientRecvFile(pendingTransfer *C.wrapped_context_t, codeC *C.char) {
+	code := C.GoString(codeC)
+	go recvFile(pendingTransfer, code)
 }
 
 //export AcceptDownload
