@@ -111,6 +111,7 @@ func sendFile(transfer PendingTransfer, fileName string) {
 			switch msg {
 			case CANCEL:
 				pendingTransfers[transferRef].CancelFunc()
+				reader.Close()
 				// TODO this is sent because the current implementation of the client
 				// does not put an error when the context is cancelled before the
 				// transfer has started

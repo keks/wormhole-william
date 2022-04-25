@@ -16,10 +16,11 @@ import (
 import "C"
 
 const (
-	ERR_CONTEXT_CANCELLED = "context canceled"
-	ERR_BROKEN_PIPE       = "write: broken pipe"
-	ERR_UNEXPECTED_EOF    = "unexpected EOF"
-	ERR_TRANSFER_REJECTED = "transfer rejected"
+	ERR_CONTEXT_CANCELLED    = "context canceled"
+	ERR_BROKEN_PIPE          = "write: broken pipe"
+	ERR_UNEXPECTED_EOF       = "unexpected EOF"
+	ERR_TRANSFER_REJECTED    = "transfer rejected"
+	ERR_FAILED_TO_GET_READER = "failed to get reader"
 )
 
 const (
@@ -56,7 +57,8 @@ func extractErrorCode(fallback C.result_type_t, errorMessage string) C.result_ty
 		}
 	} else if fallback == C.ReceiveFileError {
 		if strings.Contains(errorMessage, ERR_UNEXPECTED_EOF) ||
-			strings.Contains(errorMessage, ERR_CONTEXT_CANCELLED) {
+			strings.Contains(errorMessage, ERR_CONTEXT_CANCELLED) ||
+			strings.Contains(errorMessage, ERR_FAILED_TO_GET_READER) {
 			return C.TransferCancelled
 		}
 	}

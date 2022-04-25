@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"unsafe"
 )
@@ -25,6 +26,7 @@ type native_reader struct {
 	context      PendingTransfer
 	buffer       *C.uint8_t
 	bufferLength int
+	closed       bool
 }
 
 func NewNativeReader(ctx PendingTransfer) ReadSeekCloser {
@@ -32,15 +34,20 @@ func NewNativeReader(ctx PendingTransfer) ReadSeekCloser {
 		context:      ctx,
 		buffer:       (*C.uint8_t)(C.malloc(MAX_READ_BUFFER_LEN)),
 		bufferLength: MAX_READ_BUFFER_LEN,
+		closed:       false,
 	}
 }
 
 func (r native_reader) Close() error {
 	C.free((unsafe.Pointer)(r.buffer))
+	r.closed = true
 	return nil
 }
 
 func (r native_reader) Read(buffer []byte) (int, error) {
+	if r.closed {
+		return 0, fmt.Errorf("Reading from a closed reader")
+	}
 	l := r.bufferLength
 	if len(buffer) < r.bufferLength {
 		l = len(buffer)
@@ -62,6 +69,9 @@ func (r native_reader) Read(buffer []byte) (int, error) {
 }
 
 func (r native_reader) Seek(offset int64, whence int) (int64, error) {
+	if r.closed {
+		return 0, fmt.Errorf("Seeking from a closed reader")
+	}
 	result, err := r.context.Seek(offset, whence)
 
 	if err != nil {
