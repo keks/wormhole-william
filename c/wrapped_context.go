@@ -21,6 +21,7 @@ const (
 	ERR_UNEXPECTED_EOF       = "unexpected EOF"
 	ERR_TRANSFER_REJECTED    = "transfer rejected"
 	ERR_FAILED_TO_GET_READER = "failed to get reader"
+	ERR_WRONG_CODE           = "decrypt message failed"
 )
 
 const (
@@ -54,12 +55,16 @@ func extractErrorCode(fallback C.result_type_t, errorMessage string) C.result_ty
 		if strings.Contains(errorMessage, ERR_BROKEN_PIPE) ||
 			strings.Contains(errorMessage, ERR_CONTEXT_CANCELLED) {
 			return C.TransferCancelled
+		} else if strings.Contains(errorMessage, ERR_WRONG_CODE) {
+			return C.WrongCode
 		}
 	} else if fallback == C.ReceiveFileError {
 		if strings.Contains(errorMessage, ERR_UNEXPECTED_EOF) ||
 			strings.Contains(errorMessage, ERR_CONTEXT_CANCELLED) ||
 			strings.Contains(errorMessage, ERR_FAILED_TO_GET_READER) {
 			return C.TransferCancelled
+		} else if strings.Contains(errorMessage, ERR_WRONG_CODE) {
+			return C.WrongCode
 		}
 	}
 
