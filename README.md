@@ -1,6 +1,6 @@
 # wormhole-william
 
-wormhole-william is a Go (golang) implementation of [magic wormhole](https://magic-wormhole.readthedocs.io/en/latest/). It provides secure end-to-end encrypted file transfers between computers. The endpoints are connected using the same "wormhole code".
+wormhole-william is a Go (golang) implementation of [magic wormhole](https://magic-wormhole.readthedocs.io/en/latest/). It provides secure end-to-end encrypted file transfers between computers. The endpoints are connected using the same "wormhole code". A secure session is established via SPAKE2 cryptography and uses the [gospake2](https://salsa.debian.org/vasudev/gospake2), an implementation of SPAKE2 algorithm as [implementated](https://github.com/warner/python-spake2) and used by the Python [magic-wormhole](https://github.com/magic-wormhole/magic-wormhole) client. 
 
 wormhole-william is compatible with the official [python magic wormhole cli tool](https://github.com/warner/magic-wormhole).
 
@@ -12,6 +12,8 @@ Currently, wormhole-william supports:
 ## Docs
 
 https://pkg.go.dev/github.com/psanford/wormhole-william/wormhole?tab=doc
+
+The magic-wormhole protocol documents are described in the [magic-wormhole-protocols](https://github.com/magic-wormhole/magic-wormhole-protocols) repository.
 
 ## CLI Usage
 
@@ -27,17 +29,22 @@ Flags:
   -c, --code-length int   length of code (in bytes/words)
   -h, --help              help for send
       --hide-progress     suppress progress-bar display
+      --text string       text message to send, instead of a file.
+                          Use '-' to read from stdin
   -v, --verify            display verification string (and wait for approval)
 
 Global Flags:
-      --relay-url string   rendezvous relay to use
+      --appid string            AppID to use (default "lothar.com/wormhole/text-or-file-xfer")
+      --no-listen               (debug) don't open a listening socket for transit
+      --relay-url string        rendezvous relay to use (default "ws://relay.magic-wormhole.io:4000/v1")
+      --transit-helper string   relay server url (default "tcp:transit.magic-wormhole.io:4001")
 
 
 $ wormhole-william receive --help
 Receive a text message, file, or directory...
 
 Usage:
-  wormhole-william receive [code] [flags]
+  wormhole-william receive [OPTIONS] [CODE]... [flags]
 
 Aliases:
   receive, recv
@@ -48,7 +55,11 @@ Flags:
   -v, --verify          display verification string (and wait for approval)
 
 Global Flags:
-      --relay-url string   rendezvous relay to use
+      --appid string            AppID to use (default "lothar.com/wormhole/text-or-file-xfer")
+      --no-listen               (debug) don't open a listening socket for transit
+      --relay-url string        rendezvous relay to use (default "ws://relay.magic-wormhole.io:4000/v1")
+      --transit-helper string   relay server url (default "tcp:transit.magic-wormhole.io:4001")
+
 ```
 
 ### CLI tab completion
@@ -110,7 +121,7 @@ func recvText(code string) {
 	var c wormhole.Client
 
 	ctx := context.Background()
-	msg, err := c.Receive(ctx, code)
+	msg, err := c.Receive(ctx, code, false)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -128,6 +139,10 @@ func recvText(code string) {
 	fmt.Println(msgBody)
 }
 ```
+
+Similarly there are APIs to send file and directories: `SendFile()`
+and `SendDirectory()`. Please look at `wormhole/send.go and
+wormhole/recv.go` to look at the definitions of these functions.
 
 See the [cli tool](https://github.com/psanford/wormhole-william/tree/master/cmd) and [examples](https://github.com/psanford/wormhole-william/tree/master/examples) directory for working examples of how to use the API to send and receive text, files and directories.
 
