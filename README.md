@@ -75,7 +75,7 @@ wormhole-william uses go modules so it requires a version of the go tool chain >
 To just install via the go tool run:
 
 ```
-go install github.com/psanford/wormhole-william@latest
+go install github.com/LeastAuthority/wormhole-william@latest
 ```
 
 ## API Usage
