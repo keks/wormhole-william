@@ -34,6 +34,9 @@ const (
 	TransferText
 )
 
+// Websocket read buffer size
+const websocketReadSize int = 65536
+
 // UnsupportedProtocolErr is used in the default case of protocol switch
 // statements to account for unexpected protocols.
 var UnsupportedProtocolErr = errors.New("unsupported protocol")
@@ -264,7 +267,7 @@ func (t *fileTransport) connectToRelay(ctx context.Context, successChan chan net
 			failChan <- addr
 			return
 		}
-		wsconn.SetReadLimit(65536)
+		wsconn.SetReadLimit(websocketReadSize)
 		conn = websocket.NetConn(ctx, wsconn, websocket.MessageBinary)
 	}
 
@@ -497,7 +500,7 @@ func (t *fileTransport) listenRelay() (err error) {
 		if err != nil {
 			return fmt.Errorf("websocket.Dial failed")
 		}
-		c.SetReadLimit(65536)
+		c.SetReadLimit(websocketReadSize)
 		conn = websocket.NetConn(ctx, c, websocket.MessageBinary)
 	default:
 		return fmt.Errorf("%w: %s", UnsupportedProtocolErr, t.relayURL.Proto)
