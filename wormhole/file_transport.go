@@ -477,7 +477,9 @@ func (t *fileTransport) listen() error {
 	return nil
 }
 
-func (t *fileTransport) listenRelay(ctx context.Context) (err error) {
+func (t *fileTransport) listenRelay() (err error) {
+	ctx := context.Background()
+
 	var conn net.Conn
 	switch t.relayURL.Proto {
 	case "tcp":
