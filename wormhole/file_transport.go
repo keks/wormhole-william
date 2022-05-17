@@ -35,7 +35,7 @@ const (
 )
 
 // Websocket read buffer size
-const websocketReadSize int = 65536
+const websocketReadSize int64 = 65536
 
 // UnsupportedProtocolErr is used in the default case of protocol switch
 // statements to account for unexpected protocols.
