@@ -264,7 +264,7 @@ func (t *fileTransport) connectToRelay(ctx context.Context, successChan chan net
 			failChan <- addr
 			return
 		}
-
+		wsconn.SetReadLimit(65536)
 		conn = websocket.NetConn(ctx, wsconn, websocket.MessageBinary)
 	}
 
@@ -497,6 +497,7 @@ func (t *fileTransport) listenRelay() (err error) {
 		if err != nil {
 			return fmt.Errorf("websocket.Dial failed")
 		}
+		c.SetReadLimit(65536)
 		conn = websocket.NetConn(ctx, c, websocket.MessageBinary)
 	default:
 		return fmt.Errorf("%w: %s", UnsupportedProtocolErr, t.relayURL.Proto)
