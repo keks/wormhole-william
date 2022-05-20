@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/psanford/wormhole-william/internal"
 	"github.com/psanford/wormhole-william/internal/crypto"
@@ -254,7 +255,11 @@ func (t *fileTransport) connectToRelay(ctx context.Context, successChan chan net
 	switch t.relayURL.Proto {
 	case "tcp":
 		conn, err = d.DialContext(ctx, "tcp", addr)
-
+		if err != nil {
+			failChan <- addr
+			return
+		}
+		err = conn.SetDeadline(time.Now().Add(time.Second * 60))
 		if err != nil {
 			failChan <- addr
 			return
@@ -269,6 +274,12 @@ func (t *fileTransport) connectToRelay(ctx context.Context, successChan chan net
 		}
 		wsconn.SetReadLimit(websocketReadSize)
 		conn = websocket.NetConn(ctx, wsconn, websocket.MessageBinary)
+
+		err = conn.SetDeadline(time.Now().Add(time.Second * 60))
+		if err != nil {
+			failChan <- addr
+			return
+		}
 	}
 
 	_, err = conn.Write(t.relayHandshakeHeader())
