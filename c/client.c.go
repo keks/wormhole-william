@@ -110,7 +110,6 @@ func sendFile(transfer PendingTransfer, fileName string) {
 		for msg := range pendingTransfers[transferRef].Commands {
 			switch msg {
 			case CANCEL:
-				pendingTransfers[transferRef].CancelFunc()
 				reader.Close()
 				// TODO this is sent because the current implementation of the client
 				// does not put an error when the context is cancelled before the
@@ -119,6 +118,7 @@ func sendFile(transfer PendingTransfer, fileName string) {
 				status <- wormhole.SendResult{
 					Error: fmt.Errorf(ERR_CONTEXT_CANCELLED),
 				}
+				pendingTransfers[transferRef].CancelFunc()
 			}
 		}
 	}()
