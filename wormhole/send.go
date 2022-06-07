@@ -369,7 +369,7 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 			return
 		}
 
-		cryptor := newTransportCryptor(conn, transitKey, "transit_record_receiver_key", "transit_record_sender_key")
+		cryptor := newTransportCryptor(transport.relayWSConn, conn, transitKey, "transit_record_receiver_key", "transit_record_sender_key")
 
 		recordSize := (1 << 14)
 		// chunk
@@ -392,6 +392,16 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 				Error: errors.New("context canceled"),
 			}
 			conn.Close()
+		}()
+
+		go func() {
+			if transport.relayWSConn != nil {
+				ctx = transport.relayWSConn.CloseRead(ctx)
+				//<-newCtx.Done()
+				//fmt.Printf("ws connection closed\n")
+			} else {
+				fmt.Printf("relay wsconn is nil\n")
+			}
 		}()
 
 		for {

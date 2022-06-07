@@ -236,7 +236,7 @@ func (c *Client) Receive(ctx context.Context, code string, disableListener bool,
 			return errors.New("failed to establish connection")
 		}
 
-		cryptor := newTransportCryptor(conn, transitKey, "transit_record_sender_key", "transit_record_receiver_key")
+		cryptor := newTransportCryptor(nil, conn, transitKey, "transit_record_sender_key", "transit_record_receiver_key")
 
 		fr.cryptor = cryptor
 		fr.sha256 = sha256.New()

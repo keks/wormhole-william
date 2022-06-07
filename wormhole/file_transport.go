@@ -55,6 +55,7 @@ func (tt TransferType) String() string {
 }
 
 type transportCryptor struct {
+	wsconn         *websocket.Conn
 	conn           net.Conn
 	prefixBuf      []byte
 	nextReadNonce  *big.Int
@@ -64,7 +65,7 @@ type transportCryptor struct {
 	writeKey       [32]byte
 }
 
-func newTransportCryptor(c net.Conn, transitKey []byte, readPurpose, writePurpose string) *transportCryptor {
+func newTransportCryptor(wsConn *websocket.Conn, c net.Conn, transitKey []byte, readPurpose, writePurpose string) *transportCryptor {
 	r := hkdf.New(sha256.New, transitKey, nil, []byte(readPurpose))
 	var readKey [32]byte
 	_, err := io.ReadFull(r, readKey[:])
@@ -80,6 +81,7 @@ func newTransportCryptor(c net.Conn, transitKey []byte, readPurpose, writePurpos
 	}
 
 	return &transportCryptor{
+		wsconn:        wsConn,
 		conn:          c,
 		prefixBuf:     make([]byte, 4+crypto.NonceSize),
 		nextReadNonce: big.NewInt(0),
@@ -157,7 +159,6 @@ func (d *transportCryptor) writeRecord(msg []byte) error {
 	binary.BigEndian.PutUint32(l, uint32(len(nonceAndSealedMsg)))
 
 	lenNonceAndSealedMsg := append(l, nonceAndSealedMsg...)
-
 	_, err := d.conn.Write(lenNonceAndSealedMsg)
 	return err
 }
@@ -174,6 +175,7 @@ func newFileTransport(transitKey []byte, appID string, relayURL internal.SimpleU
 type fileTransport struct {
 	disableListener bool
 	listener        net.Listener
+	relayWSConn     *websocket.Conn
 	relayConn       net.Conn
 	relayURL        internal.SimpleURL
 	transitKey      []byte
@@ -267,6 +269,7 @@ func (t *fileTransport) connectToRelay(ctx context.Context, successChan chan net
 			failChan <- addr
 			return
 		}
+		t.relayWSConn = wsconn
 		wsconn.SetReadLimit(websocketReadSize)
 		conn = websocket.NetConn(ctx, wsconn, websocket.MessageBinary)
 	}
@@ -501,6 +504,7 @@ func (t *fileTransport) listenRelay() (err error) {
 			return fmt.Errorf("websocket.Dial failed")
 		}
 		c.SetReadLimit(websocketReadSize)
+		t.relayWSConn = c
 		conn = websocket.NetConn(ctx, c, websocket.MessageBinary)
 	default:
 		return fmt.Errorf("%w: %s", UnsupportedProtocolErr, t.relayURL.Proto)
