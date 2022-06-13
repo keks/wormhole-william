@@ -167,6 +167,7 @@ func (c *Client) Receive(ctx context.Context, code string, disableListener bool,
 	err = clientProto.WriteAppData(ctx, &genericMessage{
 		Transit: transitMsg,
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +237,7 @@ func (c *Client) Receive(ctx context.Context, code string, disableListener bool,
 			return errors.New("failed to establish connection")
 		}
 
-		cryptor := newTransportCryptor(nil, conn, transitKey, "transit_record_sender_key", "transit_record_receiver_key")
+		cryptor := newTransportCryptor(transport.relayWSConn, conn, transitKey, "transit_record_sender_key", "transit_record_receiver_key")
 
 		fr.cryptor = cryptor
 		fr.sha256 = sha256.New()
@@ -292,6 +293,7 @@ func (f *IncomingMessage) ReadDone() bool {
 // Read the decrypted contents sent to this client.
 func (f *IncomingMessage) Read(p []byte) (int, error) {
 	if f.readErr != nil {
+		fmt.Printf("readErr not nil\n")
 		return 0, f.readErr
 	}
 
@@ -299,7 +301,10 @@ func (f *IncomingMessage) Read(p []byte) (int, error) {
 	case TransferText:
 		return f.readText(p)
 	case TransferFile, TransferDirectory:
-		return f.readCrypt(p)
+		fmt.Printf("read file\n")
+		n, err := f.readCrypt(p)
+		fmt.Printf("read %d bytes\n", n)
+		return n, err
 	default:
 		return 0, fmt.Errorf("unknown Receiver type %d", f.Type)
 	}
@@ -335,14 +340,17 @@ func (f *IncomingMessage) Reject() error {
 
 func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	if f.readErr != nil {
+		fmt.Printf("readCrypt: readErr not nil\n")
 		return 0, f.readErr
 	}
 
 	if err := f.ctx.Err(); err != nil {
 		f.readErr = err
 		if f.cryptor != nil {
+			fmt.Printf("cryptor close\n")
 			f.cryptor.Close()
 		}
+		fmt.Printf("ctx err\n")
 		return 0, err
 	}
 
@@ -350,6 +358,7 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 		f.transferInitialized = true
 		err := f.initializeTransfer()
 		if err != nil {
+			fmt.Printf("initialize transfer err\n")
 			return 0, err
 		}
 	}
@@ -357,6 +366,7 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	if len(f.buf) == 0 {
 		rec, err := f.cryptor.readRecord()
 		if err == io.EOF {
+			fmt.Printf("readRecord EOF\n")
 			f.readErr = io.ErrUnexpectedEOF
 			return 0, f.readErr
 		} else if err != nil {
@@ -373,7 +383,7 @@ func (f *IncomingMessage) readCrypt(p []byte) (int, error) {
 	f.sha256.Write(p[:n])
 	if f.readCount >= f.TransferBytes64 {
 		f.readErr = io.EOF
-
+		fmt.Printf("done with transfer\n")
 		sum := f.sha256.Sum(nil)
 		ack := fileTransportAck{
 			Ack:    "ok",

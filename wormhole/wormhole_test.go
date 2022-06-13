@@ -12,19 +12,19 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	// "path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
+	// "time"
 
-	"github.com/klauspost/compress/zip"
+	// "github.com/klauspost/compress/zip"
 	"github.com/psanford/wormhole-william/rendezvous/rendezvousservertest"
 	"nhooyr.io/websocket"
 )
 
 var relayServerConstructors = map[string]func() *testRelayServer{
-	"TCP": newTestTCPRelayServer,
+	//	"TCP": newTestTCPRelayServer,
 	"WS":  newTestWSRelayServer,
 }
 
@@ -286,6 +286,7 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 
 			got, err := ioutil.ReadAll(receiver)
 			if err != nil {
+				fmt.Printf("receive did not succeed\n")
 				t.Fatal(err)
 			}
 
@@ -301,406 +302,406 @@ func TestWormholeFileTransportSendRecvViaRelayServer(t *testing.T) {
 	}
 }
 
-func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
-	ctx := context.Background()
-
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
-
-	url := rs.WebSocketURL()
-
-	for relayProtocol, newRelayServer := range relayServerConstructors {
-		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
-			relayServer := newRelayServer()
-			relayURL := relayServer.url.String()
-			defer relayServer.close()
-
-			var c0 Client
-			c0.RendezvousURL = url
-			c0.TransitRelayURL = relayURL
-
-			var c1 Client
-			c1.RendezvousURL = url
-			c1.TransitRelayURL = relayURL
-
-			// Create a fake file offer
-			var fakeBigSize int64 = 32098461509
-			offer := &offerMsg{
-				File: &offerFile{
-					FileName: "fakefile",
-					FileSize: fakeBigSize,
-				},
-			}
-
-			// just a pretend reader
-			r := bytes.NewReader(make([]byte, 1))
-
-			// skip th wrapper so we can provide our own offer
-			code, _, err := c0.sendFileDirectory(ctx, offer, r, true)
-			//c0.SendFile(ctx, "file.txt", buf)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			receiver, err := c1.Receive(ctx, code, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if int64(receiver.TransferBytes64) != fakeBigSize {
-				t.Fatalf("Mismatch in size between what we are trying to send and what is (our parsed) offer. Expected %v but got %v", fakeBigSize, receiver.TransferBytes64)
-			}
-		})
-	}
-}
-
-func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
-	ctx := context.Background()
-
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
-
-	url := rs.WebSocketURL()
-
-	for relayProtocol, newRelayServer := range relayServerConstructors {
-		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
-			relayServer := newRelayServer()
-			relayURL := relayServer.url.String()
-			defer relayServer.close()
-
-			var c0 Client
-			c0.RendezvousURL = url
-			c0.TransitRelayURL = relayURL
-
-			var c1 Client
-			c1.RendezvousURL = url
-			c1.TransitRelayURL = relayURL
-
-			fileContent := make([]byte, 1<<16)
-			for i := 0; i < len(fileContent); i++ {
-				fileContent[i] = byte(i)
-			}
-
-			buf := bytes.NewReader(fileContent)
-
-			code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			childCtx, cancel := context.WithCancel(ctx)
-			defer cancel()
-
-			receiver, err := c1.Receive(childCtx, code, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			initialBuffer := make([]byte, 1<<10)
-
-			_, err = io.ReadFull(receiver, initialBuffer)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			cancel()
-
-			_, err = ioutil.ReadAll(receiver)
-			if err == nil {
-				t.Fatalf("Expected read error but got none")
-			}
-
-			result := <-resultCh
-			if result.OK {
-				t.Fatalf("Expected error result but got ok")
-			}
-		})
-	}
-}
-
-func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
-	ctx := context.Background()
-
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
-
-	url := rs.WebSocketURL()
-
-	for relayProtocol, newRelayServer := range relayServerConstructors {
-		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
-			relayServer := newRelayServer()
-			relayURL := relayServer.url.String()
-			defer relayServer.close()
-
-			var c0 Client
-			c0.RendezvousURL = url
-			c0.TransitRelayURL = relayURL
-
-			var c1 Client
-			c1.RendezvousURL = url
-			c1.TransitRelayURL = relayURL
-
-			fileContent := make([]byte, 1<<16)
-			for i := 0; i < len(fileContent); i++ {
-				fileContent[i] = byte(i)
-			}
-
-			sendCtx, cancel := context.WithCancel(ctx)
-
-			splitR := splitReader{
-				Reader:   bytes.NewReader(fileContent),
-				cancelAt: 1 << 10,
-				cancel:   cancel,
-			}
-
-			code, resultCh, err := c0.SendFile(sendCtx, "file.txt", &splitR, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			receiver, err := c1.Receive(ctx, code, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			_, err = ioutil.ReadAll(receiver)
-			if err == nil {
-				t.Fatal("Expected read error but got none")
-			}
-
-			result := <-resultCh
-			if result.OK {
-				t.Fatal("Expected send resultCh to error but got none")
-			}
-		})
-	}
-}
-
-func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
-	ctx := context.Background()
-
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
-
-	url := rs.WebSocketURL()
-
-	// disable transit relay for this test
-	DefaultTransitRelayURL = ""
-
-	var c0Verifier string
-	var c0 Client
-	c0.RendezvousURL = url
-	c0.VerifierOk = func(code string) bool {
-		c0Verifier = code
-		return true
-	}
-
-	var c1Verifier string
-	var c1 Client
-	c1.RendezvousURL = url
-	c1.VerifierOk = func(code string) bool {
-		c1Verifier = code
-		return true
-	}
-
-	personalizeContent := make([]byte, 1<<16)
-	for i := 0; i < len(personalizeContent); i++ {
-		personalizeContent[i] = byte(i)
-	}
-
-	bodiceContent := []byte("placarding-whereat")
-
-	entries := []DirectoryEntry{
-		{
-			Path: filepath.Join("skyjacking", "personalize.txt"),
-			Reader: func() (io.ReadCloser, error) {
-				b := bytes.NewReader(personalizeContent)
-				return ioutil.NopCloser(b), nil
-			},
-		},
-		{
-			Path: filepath.Join("skyjacking", "bodice-Maytag.txt"),
-			Reader: func() (io.ReadCloser, error) {
-				b := bytes.NewReader(bodiceContent)
-				return ioutil.NopCloser(b), nil
-			},
-		},
-	}
-
-	code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	receiver, err := c1.Receive(ctx, code, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := ioutil.ReadAll(receiver)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r, err := zip.NewReader(bytes.NewReader(got), int64(len(got)))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, f := range r.File {
-		rc, err := f.Open()
-		if err != nil {
-			t.Fatal(err)
-		}
-		body, err := ioutil.ReadAll(rc)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rc.Close()
-
-		if f.Name == "personalize.txt" {
-			if !bytes.Equal(body, personalizeContent) {
-				t.Fatal("personalize.txt file content does not match")
-			}
-		} else if f.Name == "bodice-Maytag.txt" {
-			if !bytes.Equal(bodiceContent, body) {
-				t.Fatalf("bodice-Maytag.txt file content does not match %s vs %s", bodiceContent, body)
-			}
-		} else {
-			t.Fatalf("Unexpected file %s", f.Name)
-		}
-	}
-
-	result := <-resultCh
-	if !result.OK {
-		t.Fatalf("Expected ok result but got: %+v", result)
-	}
-
-	if c0Verifier == "" || c1Verifier == "" {
-		t.Fatalf("Failed to get verifier code c0=%q c1=%q", c0Verifier, c1Verifier)
-	}
-
-	if c0Verifier != c1Verifier {
-		t.Fatalf("Expected verifiers to match but were different")
-	}
-
-}
-
-func TestWormholeDirectoryTransportSendRecvRelay(t *testing.T) {
-	ctx := context.Background()
-
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
-
-	url := rs.WebSocketURL()
-
-	for relayProtocol, newRelayServer := range relayServerConstructors {
-		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
-			relayServer := newRelayServer()
-			defer relayServer.close()
-			relayURL := relayServer.url.String()
-
-			var c0Verifier string
-			var c0 Client
-			c0.RendezvousURL = url
-			c0.TransitRelayURL = relayURL
-			c0.VerifierOk = func(code string) bool {
-				c0Verifier = code
-				return true
-			}
-
-			var c1Verifier string
-			var c1 Client
-			c1.RendezvousURL = url
-			c1.TransitRelayURL = relayURL
-			c1.VerifierOk = func(code string) bool {
-				c1Verifier = code
-				return true
-			}
-
-			personalizeContent := make([]byte, 1<<16)
-			for i := 0; i < len(personalizeContent); i++ {
-				personalizeContent[i] = byte(i)
-			}
-
-			bodiceContent := []byte("placarding-whereat")
-
-			entries := []DirectoryEntry{
-				{
-					Path: filepath.Join("skyjacking", "personalize.txt"),
-					Reader: func() (io.ReadCloser, error) {
-						b := bytes.NewReader(personalizeContent)
-						return ioutil.NopCloser(b), nil
-					},
-				},
-				{
-					Path: filepath.Join("skyjacking", "bodice-Maytag.txt"),
-					Reader: func() (io.ReadCloser, error) {
-						b := bytes.NewReader(bodiceContent)
-						return ioutil.NopCloser(b), nil
-					},
-				},
-			}
-
-			code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			receiver, err := c1.Receive(ctx, code, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			got, err := ioutil.ReadAll(receiver)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			r, err := zip.NewReader(bytes.NewReader(got), int64(len(got)))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			for _, f := range r.File {
-				rc, err := f.Open()
-				if err != nil {
-					t.Fatal(err)
-				}
-				body, err := ioutil.ReadAll(rc)
-				if err != nil {
-					t.Fatal(err)
-				}
-				rc.Close()
-
-				if f.Name == "personalize.txt" {
-					if !bytes.Equal(body, personalizeContent) {
-						t.Fatal("personalize.txt file content does not match")
-					}
-				} else if f.Name == "bodice-Maytag.txt" {
-					if !bytes.Equal(bodiceContent, body) {
-						t.Fatalf("bodice-Maytag.txt file content does not match %s vs %s", bodiceContent, body)
-					}
-				} else {
-					t.Fatalf("Unexpected file %s", f.Name)
-				}
-			}
-
-			result := <-resultCh
-			if !result.OK {
-				t.Fatalf("Expected ok result but got: %+v", result)
-			}
-
-			if c0Verifier == "" || c1Verifier == "" {
-				t.Fatalf("Failed to get verifier code c0=%q c1=%q", c0Verifier, c1Verifier)
-			}
-
-			if c0Verifier != c1Verifier {
-				t.Fatalf("Expected verifiers to match but were different")
-			}
-		})
-	}
-}
+// func TestWormholeBigFileTransportSendRecvViaRelayServer(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
+
+// 	url := rs.WebSocketURL()
+
+// 	for relayProtocol, newRelayServer := range relayServerConstructors {
+// 		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
+// 			relayServer := newRelayServer()
+// 			relayURL := relayServer.url.String()
+// 			defer relayServer.close()
+
+// 			var c0 Client
+// 			c0.RendezvousURL = url
+// 			c0.TransitRelayURL = relayURL
+
+// 			var c1 Client
+// 			c1.RendezvousURL = url
+// 			c1.TransitRelayURL = relayURL
+
+// 			// Create a fake file offer
+// 			var fakeBigSize int64 = 32098461509
+// 			offer := &offerMsg{
+// 				File: &offerFile{
+// 					FileName: "fakefile",
+// 					FileSize: fakeBigSize,
+// 				},
+// 			}
+
+// 			// just a pretend reader
+// 			r := bytes.NewReader(make([]byte, 1))
+
+// 			// skip th wrapper so we can provide our own offer
+// 			code, _, err := c0.sendFileDirectory(ctx, offer, r, true)
+// 			//c0.SendFile(ctx, "file.txt", buf)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			receiver, err := c1.Receive(ctx, code, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			if int64(receiver.TransferBytes64) != fakeBigSize {
+// 				t.Fatalf("Mismatch in size between what we are trying to send and what is (our parsed) offer. Expected %v but got %v", fakeBigSize, receiver.TransferBytes64)
+// 			}
+// 		})
+// 	}
+// }
+
+// func TestWormholeFileTransportRecvMidStreamCancel(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
+
+// 	url := rs.WebSocketURL()
+
+// 	for relayProtocol, newRelayServer := range relayServerConstructors {
+// 		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
+// 			relayServer := newRelayServer()
+// 			relayURL := relayServer.url.String()
+// 			defer relayServer.close()
+
+// 			var c0 Client
+// 			c0.RendezvousURL = url
+// 			c0.TransitRelayURL = relayURL
+
+// 			var c1 Client
+// 			c1.RendezvousURL = url
+// 			c1.TransitRelayURL = relayURL
+
+// 			fileContent := make([]byte, 1<<16)
+// 			for i := 0; i < len(fileContent); i++ {
+// 				fileContent[i] = byte(i)
+// 			}
+
+// 			buf := bytes.NewReader(fileContent)
+
+// 			code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			childCtx, cancel := context.WithCancel(ctx)
+// 			defer cancel()
+
+// 			receiver, err := c1.Receive(childCtx, code, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			initialBuffer := make([]byte, 1<<10)
+
+// 			_, err = io.ReadFull(receiver, initialBuffer)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			cancel()
+
+// 			_, err = ioutil.ReadAll(receiver)
+// 			if err == nil {
+// 				t.Fatalf("Expected read error but got none")
+// 			}
+
+// 			result := <-resultCh
+// 			if result.OK {
+// 				t.Fatalf("Expected error result but got ok")
+// 			}
+// 		})
+// 	}
+// }
+
+// func TestWormholeFileTransportSendMidStreamCancel(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
+
+// 	url := rs.WebSocketURL()
+
+// 	for relayProtocol, newRelayServer := range relayServerConstructors {
+// 		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
+// 			relayServer := newRelayServer()
+// 			relayURL := relayServer.url.String()
+// 			defer relayServer.close()
+
+// 			var c0 Client
+// 			c0.RendezvousURL = url
+// 			c0.TransitRelayURL = relayURL
+
+// 			var c1 Client
+// 			c1.RendezvousURL = url
+// 			c1.TransitRelayURL = relayURL
+
+// 			fileContent := make([]byte, 1<<16)
+// 			for i := 0; i < len(fileContent); i++ {
+// 				fileContent[i] = byte(i)
+// 			}
+
+// 			sendCtx, cancel := context.WithCancel(ctx)
+
+// 			splitR := splitReader{
+// 				Reader:   bytes.NewReader(fileContent),
+// 				cancelAt: 1 << 10,
+// 				cancel:   cancel,
+// 			}
+
+// 			code, resultCh, err := c0.SendFile(sendCtx, "file.txt", &splitR, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			receiver, err := c1.Receive(ctx, code, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			_, err = ioutil.ReadAll(receiver)
+// 			if err == nil {
+// 				t.Fatal("Expected read error but got none")
+// 			}
+
+// 			result := <-resultCh
+// 			if result.OK {
+// 				t.Fatal("Expected send resultCh to error but got none")
+// 			}
+// 		})
+// 	}
+// }
+
+// func TestWormholeDirectoryTransportSendRecvDirect(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
+
+// 	url := rs.WebSocketURL()
+
+// 	// disable transit relay for this test
+// 	DefaultTransitRelayURL = ""
+
+// 	var c0Verifier string
+// 	var c0 Client
+// 	c0.RendezvousURL = url
+// 	c0.VerifierOk = func(code string) bool {
+// 		c0Verifier = code
+// 		return true
+// 	}
+
+// 	var c1Verifier string
+// 	var c1 Client
+// 	c1.RendezvousURL = url
+// 	c1.VerifierOk = func(code string) bool {
+// 		c1Verifier = code
+// 		return true
+// 	}
+
+// 	personalizeContent := make([]byte, 1<<16)
+// 	for i := 0; i < len(personalizeContent); i++ {
+// 		personalizeContent[i] = byte(i)
+// 	}
+
+// 	bodiceContent := []byte("placarding-whereat")
+
+// 	entries := []DirectoryEntry{
+// 		{
+// 			Path: filepath.Join("skyjacking", "personalize.txt"),
+// 			Reader: func() (io.ReadCloser, error) {
+// 				b := bytes.NewReader(personalizeContent)
+// 				return ioutil.NopCloser(b), nil
+// 			},
+// 		},
+// 		{
+// 			Path: filepath.Join("skyjacking", "bodice-Maytag.txt"),
+// 			Reader: func() (io.ReadCloser, error) {
+// 				b := bytes.NewReader(bodiceContent)
+// 				return ioutil.NopCloser(b), nil
+// 			},
+// 		},
+// 	}
+
+// 	code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries, false)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	receiver, err := c1.Receive(ctx, code, false)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	got, err := ioutil.ReadAll(receiver)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	r, err := zip.NewReader(bytes.NewReader(got), int64(len(got)))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+
+// 	for _, f := range r.File {
+// 		rc, err := f.Open()
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 		body, err := ioutil.ReadAll(rc)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 		rc.Close()
+
+// 		if f.Name == "personalize.txt" {
+// 			if !bytes.Equal(body, personalizeContent) {
+// 				t.Fatal("personalize.txt file content does not match")
+// 			}
+// 		} else if f.Name == "bodice-Maytag.txt" {
+// 			if !bytes.Equal(bodiceContent, body) {
+// 				t.Fatalf("bodice-Maytag.txt file content does not match %s vs %s", bodiceContent, body)
+// 			}
+// 		} else {
+// 			t.Fatalf("Unexpected file %s", f.Name)
+// 		}
+// 	}
+
+// 	result := <-resultCh
+// 	if !result.OK {
+// 		t.Fatalf("Expected ok result but got: %+v", result)
+// 	}
+
+// 	if c0Verifier == "" || c1Verifier == "" {
+// 		t.Fatalf("Failed to get verifier code c0=%q c1=%q", c0Verifier, c1Verifier)
+// 	}
+
+// 	if c0Verifier != c1Verifier {
+// 		t.Fatalf("Expected verifiers to match but were different")
+// 	}
+
+// }
+
+// func TestWormholeDirectoryTransportSendRecvRelay(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
+
+// 	url := rs.WebSocketURL()
+
+// 	for relayProtocol, newRelayServer := range relayServerConstructors {
+// 		t.Run(fmt.Sprintf("With %s relay server", relayProtocol), func(t *testing.T) {
+// 			relayServer := newRelayServer()
+// 			defer relayServer.close()
+// 			relayURL := relayServer.url.String()
+
+// 			var c0Verifier string
+// 			var c0 Client
+// 			c0.RendezvousURL = url
+// 			c0.TransitRelayURL = relayURL
+// 			c0.VerifierOk = func(code string) bool {
+// 				c0Verifier = code
+// 				return true
+// 			}
+
+// 			var c1Verifier string
+// 			var c1 Client
+// 			c1.RendezvousURL = url
+// 			c1.TransitRelayURL = relayURL
+// 			c1.VerifierOk = func(code string) bool {
+// 				c1Verifier = code
+// 				return true
+// 			}
+
+// 			personalizeContent := make([]byte, 1<<16)
+// 			for i := 0; i < len(personalizeContent); i++ {
+// 				personalizeContent[i] = byte(i)
+// 			}
+
+// 			bodiceContent := []byte("placarding-whereat")
+
+// 			entries := []DirectoryEntry{
+// 				{
+// 					Path: filepath.Join("skyjacking", "personalize.txt"),
+// 					Reader: func() (io.ReadCloser, error) {
+// 						b := bytes.NewReader(personalizeContent)
+// 						return ioutil.NopCloser(b), nil
+// 					},
+// 				},
+// 				{
+// 					Path: filepath.Join("skyjacking", "bodice-Maytag.txt"),
+// 					Reader: func() (io.ReadCloser, error) {
+// 						b := bytes.NewReader(bodiceContent)
+// 						return ioutil.NopCloser(b), nil
+// 					},
+// 				},
+// 			}
+
+// 			code, resultCh, err := c0.SendDirectory(ctx, "skyjacking", entries, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			receiver, err := c1.Receive(ctx, code, true)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			got, err := ioutil.ReadAll(receiver)
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			r, err := zip.NewReader(bytes.NewReader(got), int64(len(got)))
+// 			if err != nil {
+// 				t.Fatal(err)
+// 			}
+
+// 			for _, f := range r.File {
+// 				rc, err := f.Open()
+// 				if err != nil {
+// 					t.Fatal(err)
+// 				}
+// 				body, err := ioutil.ReadAll(rc)
+// 				if err != nil {
+// 					t.Fatal(err)
+// 				}
+// 				rc.Close()
+
+// 				if f.Name == "personalize.txt" {
+// 					if !bytes.Equal(body, personalizeContent) {
+// 						t.Fatal("personalize.txt file content does not match")
+// 					}
+// 				} else if f.Name == "bodice-Maytag.txt" {
+// 					if !bytes.Equal(bodiceContent, body) {
+// 						t.Fatalf("bodice-Maytag.txt file content does not match %s vs %s", bodiceContent, body)
+// 					}
+// 				} else {
+// 					t.Fatalf("Unexpected file %s", f.Name)
+// 				}
+// 			}
+
+// 			result := <-resultCh
+// 			if !result.OK {
+// 				t.Fatalf("Expected ok result but got: %+v", result)
+// 			}
+
+// 			if c0Verifier == "" || c1Verifier == "" {
+// 				t.Fatalf("Failed to get verifier code c0=%q c1=%q", c0Verifier, c1Verifier)
+// 			}
+
+// 			if c0Verifier != c1Verifier {
+// 				t.Fatalf("Expected verifiers to match but were different")
+// 			}
+// 		})
+// 	}
+// }
 
 type testRelayServer struct {
 	*httptest.Server
@@ -766,6 +767,7 @@ func (rs *testRelayServer) handleWSRelay(w http.ResponseWriter, r *http.Request)
 	c, err := websocket.Accept(w, r, nil)
 
 	if err != nil {
+		fmt.Printf("client connection to the server failed\n")
 		return
 	}
 
@@ -789,11 +791,13 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 		got := headerBuf[:len(expect)]
 		_, err := io.ReadFull(c, got)
 		if err != nil {
+			fmt.Printf("server: did not get %s\n", expect)
 			c.Close()
 			return false
 		}
 
 		if !bytes.Equal(got, expect) {
+			fmt.Printf("server: handshake failed\n")
 			c.Write([]byte("bad handshake\n"))
 			c.Close()
 			return false
@@ -805,6 +809,7 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	isHex := func(str string) bool {
 		_, err := hex.DecodeString(str)
 		if err != nil {
+			fmt.Printf("server: handshake failed 2\n");
 			c.Write([]byte("bad handshake\n"))
 			c.Close()
 			return false
@@ -813,11 +818,13 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	}
 
 	if !matchExpect(headerPrefix) {
+		fmt.Printf("server: headerPrefix didn't match\n")
 		return
 	}
 
 	_, err := io.ReadFull(c, headerBuf)
 	if err != nil {
+		fmt.Printf("server: read of the header failed\n")
 		c.Close()
 		return
 	}
@@ -834,18 +841,21 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	sideBuf := headerBuf[:16]
 	_, err = io.ReadFull(c, sideBuf)
 	if err != nil {
+		fmt.Printf("server: invalid side\n")
 		c.Close()
 		return
 	}
 
 	side := string(sideBuf)
 	if !isHex(side) {
+		fmt.Printf("server: invalid side 2\n")
 		return
 	}
 
 	// read \n
 	_, err = io.ReadFull(c, headerBuf[:1])
 	if err != nil {
+		fmt.Printf("server: didn't get a newline\n")
 		c.Close()
 		return
 	}
@@ -858,100 +868,122 @@ func (ts *testRelayServer) handleConn(c net.Conn) {
 	ts.mu.Unlock()
 
 	if found {
-		existing.Write([]byte("ok\n"))
-		c.Write([]byte("ok\n"))
-		go func() {
-			io.Copy(c, existing)
+		_, err = existing.Write([]byte("ok\n"))
+		if err != nil {
+			fmt.Printf("could not write to the other side\n")
+			c.Close()
+			existing.Close()
+			return
+		}
+		_, err = c.Write([]byte("ok\n"))
+		if err != nil {
+			fmt.Printf("could not write to the connection\n")
 			existing.Close()
 			c.Close()
+			return
+		}
 
+		go func() {
+
+			_, err = io.Copy(c, existing)
+			if err != nil {
+				fmt.Printf("copy error\n")
+			}
+
+			c.Close()
+			existing.Close()
 		}()
 
-		io.Copy(existing, c)
+		n, err := io.Copy(existing, c)
+		if err != nil {
+			fmt.Printf("copy error\n")
+		}
+		fmt.Printf("read %d bytes\n", n)
+
 		c.Close()
 		existing.Close()
 	}
 }
 
-func TestClient_relayURL_default(t *testing.T) {
-	var c Client
+// func TestClient_relayURL_default(t *testing.T) {
+// 	var c Client
 
-	DefaultTransitRelayURL = "tcp:transit.magic-wormhole.io:8001"
-	p := c.relayURL().Proto
-	if p != "tcp" {
-		t.Error(fmt.Sprintf("invalid protocol, expected tcp, got %v", p))
-	}
-}
+// 	DefaultTransitRelayURL = "tcp:transit.magic-wormhole.io:8001"
+// 	p := c.relayURL().Proto
+// 	if p != "tcp" {
+// 		t.Error(fmt.Sprintf("invalid protocol, expected tcp, got %v", p))
+// 	}
+// }
 
-func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
-	ctx := context.Background()
+// func TestWormholeFileTransportSendRecvViaWSRelayServer(t *testing.T) {
+// 	ctx := context.Background()
 
-	rs := rendezvousservertest.NewServerLegacy()
-	defer rs.Close()
+// 	rs := rendezvousservertest.NewServerLegacy()
+// 	defer rs.Close()
 
-	url := rs.WebSocketURL()
+// 	url := rs.WebSocketURL()
 
-	relayServer := newTestWSRelayServer()
-	relayURL := relayServer.url.String()
-	defer relayServer.close()
+// 	relayServer := newTestWSRelayServer()
+// 	relayURL := relayServer.url.String()
+// 	defer relayServer.close()
 
-	var c0 Client
-	c0.RendezvousURL = url
-	c0.TransitRelayURL = relayURL
+// 	var c0 Client
+// 	c0.RendezvousURL = url
+// 	c0.TransitRelayURL = relayURL
 
-	var c1 Client
-	c1.RendezvousURL = url
-	c1.TransitRelayURL = relayURL
+// 	var c1 Client
+// 	c1.RendezvousURL = url
+// 	c1.TransitRelayURL = relayURL
 
-	fileContent := make([]byte, 1<<16)
-	for i := 0; i < len(fileContent); i++ {
-		fileContent[i] = byte(i)
-	}
+// 	fileContent := make([]byte, 1<<16)
+// 	for i := 0; i < len(fileContent); i++ {
+// 		fileContent[i] = byte(i)
+// 	}
 
-	buf := bytes.NewReader(fileContent)
+// 	buf := bytes.NewReader(fileContent)
 
-	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+// 	code, resultCh, err := c0.SendFile(ctx, "file.txt", buf, true)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	receiver, err := c1.Receive(ctx, code, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+// 	receiver, err := c1.Receive(ctx, code, true)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	got, err := ioutil.ReadAll(receiver)
-	if err != nil {
-		t.Fatal(err)
-	}
+// 	got, err := ioutil.ReadAll(receiver)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
 
-	if !bytes.Equal(got, fileContent) {
-		t.Fatalf("File contents mismatch")
-	}
+// 	if !bytes.Equal(got, fileContent) {
+// 		t.Fatalf("File contents mismatch")
+// 	}
 
-	result := <-resultCh
-	if !result.OK {
-		t.Fatalf("Expected ok result but got: %+v", result)
-	}
-}
+// 	result := <-resultCh
+// 	if !result.OK {
+// 		t.Fatalf("Expected ok result but got: %+v", result)
+// 	}
+// }
 
-type splitReader struct {
-	*bytes.Reader
-	offset    int
-	cancelAt  int
-	cancel    func()
-	didCancel bool
-}
+// type splitReader struct {
+// 	*bytes.Reader
+// 	offset    int
+// 	cancelAt  int
+// 	cancel    func()
+// 	didCancel bool
+// }
 
-func (s *splitReader) Read(b []byte) (int, error) {
-	n, err := s.Reader.Read(b)
-	s.offset += n
-	if !s.didCancel && s.offset >= s.cancelAt {
-		s.cancel()
-		s.didCancel = true
-		// yield the cpu to give the cancellation goroutine a chance
-		// to run (esp important for when GOMAXPROCS=1)
-		time.Sleep(1 * time.Millisecond)
-	}
-	return n, err
-}
+// func (s *splitReader) Read(b []byte) (int, error) {
+// 	n, err := s.Reader.Read(b)
+// 	s.offset += n
+// 	if !s.didCancel && s.offset >= s.cancelAt {
+// 		s.cancel()
+// 		s.didCancel = true
+// 		// yield the cpu to give the cancellation goroutine a chance
+// 		// to run (esp important for when GOMAXPROCS=1)
+// 		time.Sleep(1 * time.Millisecond)
+// 	}
+// 	return n, err
+// }

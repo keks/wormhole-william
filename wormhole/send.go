@@ -394,15 +394,15 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 			conn.Close()
 		}()
 
-		go func() {
-			if transport.relayWSConn != nil {
-				ctx = transport.relayWSConn.CloseRead(ctx)
-				//<-newCtx.Done()
-				//fmt.Printf("ws connection closed\n")
-			} else {
-				fmt.Printf("relay wsconn is nil\n")
-			}
-		}()
+		// go func() {
+		// 	if transport.relayWSConn != nil {
+		// 		newCtx := transport.relayWSConn.CloseRead(ctx)
+		// 		<-newCtx.Done()
+		// 		fmt.Printf("ws connection closed\n")
+		// 	} else {
+		// 		fmt.Printf("relay wsconn is nil\n")
+		// 	}
+		// }()
 
 		for {
 			n, err := r.Read(recordSlice)

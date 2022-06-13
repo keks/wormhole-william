@@ -95,10 +95,12 @@ func (d *transportCryptor) Close() error {
 
 func (d *transportCryptor) readRecord() ([]byte, error) {
 	if d.err != nil {
+		fmt.Printf("d.err not nil\n")
 		return nil, d.err
 	}
 	_, err := io.ReadFull(d.conn, d.prefixBuf)
 	if err != nil {
+		fmt.Printf("io.ReadFull from conn err: %v\n", err)
 		d.err = err
 		return nil, d.err
 	}
@@ -160,6 +162,9 @@ func (d *transportCryptor) writeRecord(msg []byte) error {
 
 	lenNonceAndSealedMsg := append(l, nonceAndSealedMsg...)
 	_, err := d.conn.Write(lenNonceAndSealedMsg)
+	if err != nil {
+		fmt.Printf("conn write error\n")
+	}
 	return err
 }
 
