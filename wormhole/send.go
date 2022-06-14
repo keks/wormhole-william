@@ -404,7 +404,37 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 		// 	}
 		// }()
 
+		type recordOrError struct {
+			record []byte
+			err error
+		}
+
+		var (
+			recordChan = make(chan recordOrError)
+			done = make(chan struct{})
+		)
+
+		go func() {
+			respRec, err := cryptor.readRecord()
+			var recOrErr recordOrError
+
+			if err != nil {
+				recOrErr.err = err
+			} else {
+				recOrErr.record = respRec
+			}
+
+			recordChan <- recOrErr
+			close(done)
+		}()
+
 		for {
+			select {
+			case <-done:
+				break
+			default:
+			}
+
 			n, err := r.Read(recordSlice)
 			if n > 0 {
 				hasher.Write(recordSlice[:n])
@@ -426,11 +456,13 @@ func (c *Client) sendFileDirectory(ctx context.Context, offer *offerMsg, r io.Re
 			}
 		}
 
-		respRec, err := cryptor.readRecord()
-		if err != nil {
+		recOrErr := <- recordChan
+		if recOrErr.err != nil {
 			sendErr(err)
 			return
 		}
+
+		respRec := recOrErr.record
 
 		var ack fileTransportAck
 		err = json.Unmarshal(respRec, &ack)
